@@ -1,0 +1,12 @@
+# Copy this file to .gift
+remotes:
+    origin: a
+    wiki:   b
+
+dirs:
+    a/b/c:
+        - origin
+        - master
+
+
+# vim: ft=yaml

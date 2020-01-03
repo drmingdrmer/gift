@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+# coding: utf-8
+
+import os
+import subprocess
+import sys
+
+import yaml
+
+if hasattr(sys, 'getfilesystemencoding'):
+    defenc = sys.getfilesystemencoding()
+if defenc is None:
+    defenc = sys.getdefaultencoding()
+
+conffn = ".gift"
+statefn = ".gift-state"
+
+verbose = False
+# verbose = True
+
+
+def dd(*msg):
+    if not verbose:
+        return
+    os.write(2, b">>> ")
+    for m in msg:
+        os.write(2, _bytes(m))
+        os.write(2, b" ")
+    os.write(2, b"\n")
+
+
+def _out(f, line):
+    os.write(f, _bytes(line))
+    os.write(f, b"\n")
+
+
+def pj(*args):
+    return os.path.join(*args)
+
+
+class Gift(object):
+    """
+    """
+
+    # inside gitdir:
+    sub_gitdir_fmt = "gift/subdir/{dir}"
+
+    def __init__(self, startpath, opt):
+        self.startpath = startpath
+        self.opt = opt
+        self.cwd = "."
+        # TODO test non git dir
+        _, out, _ = cmdx("git", "rev-parse", "--show-toplevel", cwd=self.cwd)
+        self.working_dir = out[0]
+        # TODO test working_dir
+        dd("working_dir:", self.working_dir)
+
+        _, out, _ = cmdx("git", "rev-parse", "--git-dir", cwd=self.cwd)
+        self.git_dir = out[0]
+        dd("git_dir:", self.git_dir)
+
+        self.confpath = self.working_dir + '/' + conffn
+        self.conf = self.parse()
+
+    def parse(self):
+
+        with open(self.confpath, 'r') as f:
+            yml = f.read()
+        yml = yaml.load(yml)
+
+        rm = yml["remotes"]
+        dirs = yml["dirs"]
+
+        for k in dirs:
+            upstream = dirs[k]
+            sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
+            dirs[k] = {
+                "dir": k,
+                "upstream": {
+                    "name": upstream[0],
+                    "url": rm[upstream[0]],
+                    "branch": upstream[1],
+                },
+                "refhead": "refs/gift/sub/{dir}".format(dir=k),
+                "sub_gitdir": sub_gitdir,
+                "env": {
+                    "GIT_DIR": pj(self.git_dir, sub_gitdir),
+                    "GIT_WORK_TREE": pj(self.working_dir, k),
+                    # "GIT_OBJECT_DIRECTORY": pj(self.git_dir, "objects"),
+                },
+                "bareenv": {
+                    "GIT_DIR": pj(self.git_dir, sub_gitdir),
+                },
+            }
+
+        return yml
+
+    def check_worktree(self, sb):
+        self.try_init_sub_git(sb)
+        self.try_init_sub_worktree(sb)
+
+    def try_init_sub_git(self, sb):
+
+        wtgpath = pj(self.git_dir, sb["sub_gitdir"])
+
+        if os.path.isdir(wtgpath):
+            dd("worktree exist:", wtgpath)
+            return
+
+        env = sb['bareenv']
+
+        dd("init gitdir for:", env)
+        cmdx("git", "init", "--bare", env["GIT_DIR"])
+
+        dd("setup remote for:", env["GIT_DIR"])
+        up = sb["upstream"]
+        cmdx("git", "remote", "add", up["name"], up["url"], env=env)
+        cmdx("git", "fetch", up["name"], env=env)
+
+    def try_init_sub_worktree(self, sb):
+
+        path = sb['env']["GIT_WORK_TREE"]
+        if not os.path.isdir(path):
+            os.makedirs(path, mode=0o755)
+
+        # If there is HEAD initialized in sub repo dir
+        try:
+            cmdx("git", "rev-parse", "--verify", "--quiet", "HEAD", env=sb["env"])
+            dd("HEAD exists")
+            return
+        except ProcError as e:
+            dd("HEAD not found:", e)
+            cmdx("git", "checkout", sb['upstream']["branch"], env=sb['env'])
+
+    def find_parent(self, subdir):
+
+        working_dir = self.working_dir
+        subdir = os.path.abspath(subdir)
+
+        dd("working_dir:", working_dir)
+        dd("subdir:", subdir)
+
+        dd("conf:", self.conf["dirs"])
+
+        while subdir != working_dir:
+            reldir = subdir[len(working_dir) + 1:]
+            dd("reldir:", reldir)
+            if reldir in self.conf["dirs"]:
+                return reldir, self.conf["dirs"][reldir]
+
+            # trim last part.
+            subdir, _ = os.path.split(subdir)
+        else:
+            return '', None
+
+    def cmd(self, cmds):
+
+        subdir = "."
+
+        subdir, sb = self.find_parent(subdir)
+        dd("subdir:", subdir, sb)
+
+        if sb is None:
+            dd("not subdir")
+            env = {}
+        else:
+            self.check_worktree(sb)
+            env = sb["env"]
+
+        _, out, err = cmdx("git", *cmds, env=env)
+        for l in out:
+            _out(1, l)
+        for l in err:
+            _out(2, l)
+
+    def x_initsub(self, cmds):
+        for sub in self.conf["dirs"]:
+            sb = self.conf["dirs"][sub]
+            self.check_worktree(sb)
+
+        try:
+            cont = read_file(pj(self.working_dir, statefn))
+        except IOError:
+            # TODO message
+            pass
+        else:
+            refs = yaml.load(cont)
+            self._populate_ref(refs)
+
+    def x_commitsub(self, cmds):
+        refs = []
+        for sub in self.conf["dirs"]:
+            sb = self.conf["dirs"][sub]
+            self.check_worktree(sb)
+            commithash = self._add_sub(sb)
+            refs.append([sb["dir"], commithash])
+
+        refs = sorted(refs)
+        cont = yaml.dump(refs)
+        statep = pj(self.working_dir, ".gift-state")
+        write_file(statep, cont)
+
+        cmdx("git", "add", statep)
+        cmdx("git", "commit", "-m", "commit subdirs")
+
+        self._populate_ref(refs)
+
+    def _populate_ref(self, refs):
+
+        for subdir, hsh in refs:
+            sb = self.conf["dirs"][subdir]
+
+            try:
+                # TODO test this
+                cmdx("git", "update-ref", "refs/remotes/super/head", hsh, env=sb["env"])
+            except ProcError:
+                # TODO
+
+                dd("can not update ref")
+
+    def _add_sub(self, sb):
+        cmdx("git", "fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"])
+        _, out, _ = cmdx("git", "rev-parse", sb["refhead"] + "^{tree}")
+        treeish = out[0]
+
+        _, out, _ = cmdx("git", "rev-parse", sb["refhead"])
+        commithash = out[0]
+
+        cmdx("git", "read-tree", "--prefix=" + sb["dir"], treeish)
+        return commithash
+
+# utils
+
+
+class ProcError(Exception):
+
+    def __init__(self, returncode, out, err, cmd, arguments, options):
+
+        super(ProcError, self).__init__(returncode,
+                                        out,
+                                        err,
+                                        cmd,
+                                        arguments,
+                                        options)
+
+        self.returncode = returncode
+        self.out = out
+        self.err = err
+        self.command = cmd
+        self.arguments = arguments
+        self.options = options
+
+    def __str__(self):
+        s = [str(self.command) + " " + str(self.arguments),
+             "exit code: " + str(self.returncode)]
+        for l in self.out:
+            s.append(l)
+
+        for l in self.err:
+            s.append(l)
+        return "\n".join(s)
+
+
+def cmdx(cmd, *arguments, **options):
+
+    dd("command:", cmd, arguments, options)
+
+    close_fds = options.get('close_fds', True)
+    cwd = options.get('cwd', None)
+    shell = options.get('shell', False)
+    env = options.get('env', None)
+    if env is not None:
+        env = dict(os.environ, **env)
+    stdin = options.get('stdin', None)
+
+    arguments = [_bytes(x) for x in arguments]
+    stdin = _bytes(stdin)
+
+    subproc = subprocess.Popen([cmd] + list(arguments),
+                               close_fds=close_fds,
+                               shell=shell,
+                               cwd=cwd,
+                               env=env,
+                               stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, )
+
+    out, err = subproc.communicate(input=stdin)
+
+    subproc.wait()
+
+    out = _str(out)
+    err = _str(err)
+
+    if out != '':
+        out = out.strip("\n").split("\n")
+        for l in out:
+            dd("stdout:", l)
+    else:
+        out = []
+
+    if err != '':
+        err = err.strip("\n").split("\n")
+        for l in err:
+            dd("stderr:", l)
+    else:
+        err = []
+
+    if subproc.returncode != 0:
+        raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
+
+    return subproc.returncode, out, err
+
+
+def read_file(path):
+    with open(path, 'r') as f:
+        return f.read()
+
+
+def write_file(path, cont):
+    with open(path, 'w') as f:
+        f.write(cont)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _bytes(s):
+    if isinstance(s, bytes):
+        return s
+    if isinstance(s, str):
+        return bytes(s, defenc)
+    return bytes(str(s), defenc)
+
+
+def _str(bs):
+    if isinstance(bs, bytes):
+        return bs.decode(defenc, 'surrogateescape')
+    return bs
+
+
+def git_args():
+    args = sys.argv[1:]
+    opt = {
+        "startpath": ".",
+        "confkv": [],
+        "paging": False,
+        "no_replace_objects": False,
+        "bare": False,
+        "git_dir": None,
+        "work_tree": None,
+        "namespace": None,
+        "super_prefix": None,
+    }
+    giftopt = {
+        "verbose": False,
+    }
+
+    while True:
+        arg = args.pop(0)
+
+        if arg == '--version':
+            cmd_ver()
+            return
+        if arg == '--help':
+            cmd_help()
+            return
+        if arg == '-C':
+            opt["startpath"] = args.pop(0)
+            continue
+        if arg == '-c':
+            opt["confkv"].append(args.pop(0))
+            continue
+        # if arg == '--exec-path[=<path>]':
+        if arg.startswith('--exec-path='):
+            # TODO ignored
+            continue
+        if arg == '--html-path':
+            cmd_html_path()
+            return
+        if arg == '--man-path':
+            cmd_man_path()
+            return
+        if arg == '--info-path':
+            cmd_info_path()
+            return
+        if arg in ('-p', '--paginate'):
+            opt["paging"] = True
+            continue
+        if arg == '--no-pager':
+            opt["paging"] = False
+            continue
+
+        if arg == '--no-replace-objects':
+            opt["no_replace_objects"] = True
+            continue
+
+        if arg == '--bare':
+            opt["bare"] = True
+            continue
+
+        if arg.startswith('--git-dir='):
+            opt["git_dir"] = arg.split('=', 1)[1]
+            continue
+
+        if arg.startswith('--work-tree='):
+            opt["work_tree"] = arg.split('=', 1)[1]
+            continue
+
+        if arg.startswith('--namespace='):
+            opt["namespace"] = arg.split('=', 1)[1]
+            continue
+        if arg.startswith('--super-prefix='):
+            opt["super_prefix"] = arg.split('=', 1)[1]
+            continue
+
+        if arg == '--gift-verbose':
+            giftopt["verbose"] = True
+            continue
+
+        break
+
+    # push back
+    cmds = [arg] + args
+    return opt, giftopt, cmds
+
+
+if __name__ == "__main__":
+    opt, giftopt, cmds = git_args()
+    dd("opt:", opt)
+    dd("cmds:", cmds)
+    gift = Gift(".", opt)
+
+    if giftopt["verbose"]:
+        verbose = True
+
+    if cmds[0] == "initsub":
+        gift.x_initsub(cmds)
+    elif cmds[0] == "commitsub":
+        gift.x_commitsub(cmds)
+    else:
+        gift.cmd(cmds)

@@ -1,0 +1,16 @@
+language: python
+
+# cache pip dependency
+cache: pip
+
+python:
+  - "3.7"
+
+install:
+  - pip install -r requirements.txt
+
+script:
+  - python -m unittest -c -v --failfast
+
+# after_success:
+#   - pip install python-coveralls && coveralls

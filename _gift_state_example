@@ -1,0 +1,5 @@
+
+dirs:
+    a/b/c: 
+
+# vim: ft=yaml
