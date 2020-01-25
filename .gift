@@ -1,0 +1,10 @@
+remotes:
+    pyauto:   https://github.com/drmingdrmer/pyauto
+
+dirs:
+    pyauto:
+        - pyauto
+        - master
+
+
+# vim: ft=yaml
