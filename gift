@@ -66,7 +66,7 @@ class Gift(object):
 
         with open(self.confpath, 'r') as f:
             yml = f.read()
-        yml = yaml.load(yml)
+        yml = yaml.safe_load(yml)
 
         rm = yml["remotes"]
         dirs = yml["dirs"]
@@ -184,7 +184,7 @@ class Gift(object):
             # TODO message
             pass
         else:
-            refs = yaml.load(cont)
+            refs = yaml.safe_load(cont)
             self._populate_ref(refs)
 
     def x_commitsub(self, cmds):
