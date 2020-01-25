@@ -1,14 +1,6 @@
-remotes:
-    bar:   ../bargit
-    wow:   ../wowgit
-
 dirs:
-    foo/bar:
-        - bar
-        - master
-    foo/wow:
-        - wow
-        - master
+    foo/bar: ../bargit@master
+    foo/wow: ../wowgit
 
 
 # vim: ft=yaml

@@ -1,12 +1,20 @@
 # Copy this file to .gift
 remotes:
-    origin: a
-    wiki:   b
+    3_auto_arg:            git@{t2}:{t1}/{t0}.git
+    2_auto_arg:            git@github.com:{t1}/{t0}.git
+    1_auto_arg_1_user_arg: git@github.com:{}/{t0}.git
+    2_user_arg:            git@github.com:{}/{}.git
+    fixed:                 git@github.com/drmingdrmer/gift.git
 
 dirs:
-    a/b/c:
-        - origin
-        - master
+    deps/0/github.com/drmingdrmer/gift: 3_auto_arg@master
+    deps/1/github.com/drmingdrmer/gift: 3_auto_arg()@master
+    deps/2/drmingdrmer/gift:            2_auto_arg()@master
+    deps/3/gift:                        1_auto_arg_1_user_arg(drmingdrmer)@master
+    deps/4/gift:                        2_user_arg(drmingdrmer, gift)@master
+    deps/5/gift:                        fixed@master
+    deps/6/gift:                        fixed()@master
+    deps/7/gift:                        https://github.com/drmingdrmer/gift.git@master
 
 
 # vim: ft=yaml

@@ -13,7 +13,8 @@ if defenc is None:
     defenc = sys.getdefaultencoding()
 
 conffn = ".gift"
-statefn = ".gift-state"
+refsfn = ".gift-refs"
+superref = "refs/remotes/super/head"
 
 verbose = False
 # verbose = True
@@ -45,41 +46,61 @@ class Gift(object):
     # inside gitdir:
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
-    def __init__(self, startpath, opt):
+    def __init__(self, startpath, opt, gitpath=None):
         self.startpath = startpath
         self.opt = opt
         self.cwd = "."
+        self.gitpath = gitpath or "git"
+
+
+    def init_git_config(self):
+
         # TODO test non git dir
-        _, out, _ = cmdx("git", "rev-parse", "--show-toplevel", cwd=self.cwd)
-        self.working_dir = out[0]
+        self.working_dir = cmd0(self.gitpath, "rev-parse", "--show-toplevel", cwd=self.cwd)
         # TODO test working_dir
         dd("working_dir:", self.working_dir)
 
-        _, out, _ = cmdx("git", "rev-parse", "--git-dir", cwd=self.cwd)
-        self.git_dir = out[0]
+        self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
         dd("git_dir:", self.git_dir)
 
         self.confpath = self.working_dir + '/' + conffn
         self.conf = self.parse()
 
+    def parse_remote(self, subdir, remo):
+        elts = remo.rsplit("@", 1)
+        if len(elts) == 1:
+            elts.append("master")
+        return ["origin", elts[0], elts[1]]
+
+
+    def read_conf(self):
+        try:
+            with open(self.confpath, 'r') as f:
+                cont = f.read()
+        except OSError:
+            # TODO info of no config
+            return {
+                    "dirs": {}
+            }
+        yml = yaml.safe_load(cont)
+        return yml
+
     def parse(self):
 
-        with open(self.confpath, 'r') as f:
-            yml = f.read()
-        yml = yaml.safe_load(yml)
+        yml = self.read_conf()
 
-        rm = yml["remotes"]
+        # rm = yml.get("remotes", {})
         dirs = yml["dirs"]
 
         for k in dirs:
-            upstream = dirs[k]
+            ups = self.parse_remote(k, dirs[k])
             sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
             dirs[k] = {
                 "dir": k,
                 "upstream": {
-                    "name": upstream[0],
-                    "url": rm[upstream[0]],
-                    "branch": upstream[1],
+                    "name": ups[0],
+                    "url": ups[1],
+                    "branch": ups[2],
                 },
                 "refhead": "refs/gift/sub/{dir}".format(dir=k),
                 "sub_gitdir": sub_gitdir,
@@ -95,6 +116,22 @@ class Gift(object):
 
         return yml
 
+    def _g(self, what=""):
+        # TODO cwd
+        # TODO git path
+        if what == '':
+            return Git(gitpath=self.gitpath,
+                       gitdir=self.git_dir,
+                       working_dir=self.working_dir)
+
+        if isinstance(what, str):
+            sb = self.conf["dirs"][what]
+        else:
+            sb = what
+        return Git(gitpath=self.gitpath,
+                   gitdir=sb["env"]["GIT_DIR"],
+                   working_dir=sb["env"]["GIT_WORK_TREE"])
+
     def check_worktree(self, sb):
         self.try_init_sub_git(sb)
         self.try_init_sub_worktree(sb)
@@ -104,18 +141,15 @@ class Gift(object):
         wtgpath = pj(self.git_dir, sb["sub_gitdir"])
 
         if os.path.isdir(wtgpath):
-            dd("worktree exist:", wtgpath)
+            dd("gitdir exist:", wtgpath)
             return
 
         env = sb['bareenv']
 
-        dd("init gitdir for:", env)
-        cmdx("git", "init", "--bare", env["GIT_DIR"])
-
-        dd("setup remote for:", env["GIT_DIR"])
         up = sb["upstream"]
-        cmdx("git", "remote", "add", up["name"], up["url"], env=env)
-        cmdx("git", "fetch", up["name"], env=env)
+        cmdx(self.gitpath, "init", "--bare", env["GIT_DIR"])
+        cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=env)
+        cmdx(self.gitpath, "fetch", up["name"], env=env)
 
     def try_init_sub_worktree(self, sb):
 
@@ -125,12 +159,12 @@ class Gift(object):
 
         # If there is HEAD initialized in sub repo dir
         try:
-            cmdx("git", "rev-parse", "--verify", "--quiet", "HEAD", env=sb["env"])
+            cmdx(self.gitpath, "rev-parse", "--verify", "--quiet", "HEAD", env=sb["env"])
             dd("HEAD exists")
             return
         except ProcError as e:
             dd("HEAD not found:", e)
-            cmdx("git", "checkout", sb['upstream']["branch"], env=sb['env'])
+            cmdx(self.gitpath, "checkout", sb['upstream']["branch"], env=sb['env'])
 
     def find_parent(self, subdir):
 
@@ -155,31 +189,108 @@ class Gift(object):
 
     def cmd(self, cmds):
 
-        subdir = "."
+        # If a command does not need to be run inside a git repo, delegate it
+        # and quit.
+        if cmds[0] == "init" and '--sub' not in cmds:
+            # delegate to original git
+            # TODO if user invoke "git --git-dir", original git still need env or else
+            _, out, err = cmdx(self.gitpath, *cmds)
+            display(out, err)
+            return
 
+        self.init_git_config()
+
+        subdir = "."
         subdir, sb = self.find_parent(subdir)
         dd("subdir:", subdir, sb)
 
-        if sb is None:
-            dd("not subdir")
-            env = {}
-        else:
+        refs0 = self._get_head_refs()
+
+        env = None
+        if sb is not None:
             self.check_worktree(sb)
             env = sb["env"]
 
-        _, out, err = cmdx("git", *cmds, env=env)
-        for l in out:
-            _out(1, l)
-        for l in err:
-            _out(2, l)
+        # TODO nested?
+        if len(cmds) >= 2:
+            cmd = cmds[0]
 
-    def x_initsub(self, cmds):
+            if '--' in cmds:
+                i = cmds.index('--')
+                args = cmds[:i]
+                left = cmds[i + 1:]
+            else:
+                args = cmds
+                left = []
+
+            if '--sub' in args:
+                # remove "--sub"
+                i = args.index('--sub')
+                args = args[:i] + args[i+1:]
+                cmds = args + left
+
+                if cmd == "init":
+                    return self.x_init_sub(cmds)
+                if cmd == "clone":
+                    return self.x_clone_sub(cmds)
+                elif cmd == 'commit':
+                    return self.x_commit_sub(cmds)
+                elif cmd == 'fetch':
+                    return self.x_fetch_sub(cmds)
+                elif cmd == 'merge':
+                    return self.x_merge_sub(cmds)
+                elif cmd == 'reset':
+                    return self.x_reset_sub(cmds)
+
+        # delegate to original git
+        _, out, err = cmdx(self.gitpath, *cmds, env=env)
+        display(out, err)
+
+        refs1 = self._get_head_refs()
+        if refs0 != refs1 and refs1 is not None:
+            self._populate_ref(refs1)
+
+    def _get_head_refs(self):
+        try:
+            cont = cmd0(self.gitpath, "show", "HEAD:" + refsfn)
+        except ProcError:
+            return None
+
+        try:
+            return yaml.safe_load(cont)
+        except Exception as e:
+            print(repr(e))
+            return None
+
+    def x_clone_sub(self, cmds):
+
+        # TODO test ".gift" without "remotes"
+        # TODO test clone --sub
+        remote = cmds[1]
+        subdir = cmds[2]
+        # TODO overwrite existent conf?
+
+        y = self.read_conf()
+        y["dirs"][subdir] = remote
+        cont = yaml.dump(y)
+        write_file(self.confpath, cont)
+        self.init_git_config()
+
+        g = self._g()
+        g.cmdx("add", self.confpath)
+        g.cmdx("commit", self.confpath, "-m", "add sub repo: " + remote + " in "+ subdir)
+
+        self.x_init_sub([])
+        self.x_commit_sub([])
+
+
+    def x_init_sub(self, cmds):
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
             self.check_worktree(sb)
 
         try:
-            cont = read_file(pj(self.working_dir, statefn))
+            cont = read_file(pj(self.working_dir, refsfn))
         except IOError:
             # TODO message
             pass
@@ -187,23 +298,64 @@ class Gift(object):
             refs = yaml.safe_load(cont)
             self._populate_ref(refs)
 
-    def x_commitsub(self, cmds):
+    def x_commit_sub(self, cmds):
+        g = self._g()
+        supertree = g.get_tree("HEAD")
+        parent = g.commit_of("HEAD")
         refs = []
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
             self.check_worktree(sb)
-            commithash = self._add_sub(sb)
+            supertree, commithash = self._add_sub(supertree, sb)
             refs.append([sb["dir"], commithash])
 
         refs = sorted(refs)
         cont = yaml.dump(refs)
-        statep = pj(self.working_dir, ".gift-state")
+        statep = pj(self.working_dir, refsfn)
         write_file(statep, cont)
 
-        cmdx("git", "add", statep)
-        cmdx("git", "commit", "-m", "commit subdirs")
+        statehash = g.blob_new(statep)
+        supertree = g.tree_add_obj(supertree, refsfn, statehash)
+
+        newcommit = g.cmd0("commit-tree", "-p", parent, supertree, stdin="commit subdirs")
+        g.cmdx("reset", newcommit)
 
         self._populate_ref(refs)
+
+    def x_fetch_sub(self, cmds):
+        for sub in self.conf["dirs"]:
+            sb = self.conf["dirs"][sub]
+            self.check_worktree(sb)
+            _, out, err = cmdx(self.gitpath, "fetch", sb["upstream"]["name"], env=sb["env"])
+            display(out, err)
+
+    def x_merge_sub(self, cmds):
+        # only ff-only allowed
+        for sub in self.conf["dirs"]:
+            sb = self.conf["dirs"][sub]
+            self.check_worktree(sb)
+            _, out, err = cmdx(self.gitpath, "merge", "--ff-only", env=sb["env"])
+            display(out, err)
+
+    def x_reset_sub(self, cmds):
+        candidate_args = ['--soft',
+                          '--mixed',
+                          '-N',
+                          '--hard',
+                          '--merge',
+                          '--keep',
+                          '-q',
+                          '--quiet', ]
+        args = []
+        for c in candidate_args:
+            if c in cmds:
+                args.append(c)
+
+        for sub in self.conf["dirs"]:
+            sb = self.conf["dirs"][sub]
+            self.check_worktree(sb)
+            _, out, err = cmdx(self.gitpath, "reset", *args, superref, env=sb["env"])
+            display(out, err)
 
     def _populate_ref(self, refs):
 
@@ -212,22 +364,164 @@ class Gift(object):
 
             try:
                 # TODO test this
-                cmdx("git", "update-ref", "refs/remotes/super/head", hsh, env=sb["env"])
+                cmdx(self.gitpath, "update-ref", superref, hsh, env=sb["env"])
             except ProcError:
                 # TODO
 
                 dd("can not update ref")
 
-    def _add_sub(self, sb):
-        cmdx("git", "fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"])
-        _, out, _ = cmdx("git", "rev-parse", sb["refhead"] + "^{tree}")
-        treeish = out[0]
+    def _add_sub(self, supertree, sb):
+        g = self._g()
 
-        _, out, _ = cmdx("git", "rev-parse", sb["refhead"])
-        commithash = out[0]
+        g.cmdx("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"])
 
-        cmdx("git", "read-tree", "--prefix=" + sb["dir"], treeish)
-        return commithash
+        sub_tree = g.get_tree(sb["refhead"])
+        supertree = g.tree_add_obj(supertree, sb["dir"], sub_tree)
+
+        return supertree, g.commit_of(sb["refhead"])
+
+
+class Git(object):
+
+    def __init__(self, gitpath=None, gitdir=None, working_dir=None, start_dir=None):
+        self.gitpath = gitpath or "git"
+        self.gitdir = gitdir
+        self.working_dir = working_dir
+        self.start_dir = start_dir
+
+    def _env(self):
+        env = {}
+        if self.gitdir is not None:
+            env["GIT_DIR"] = self.gitdir
+        if self.working_dir is not None:
+            env["GIT_WORK_TREE"] = self.working_dir
+
+        return env
+
+    def _opt(self, **kwargs):
+        """
+        Build env and cwd for a git command by specifying git-dir, working-dir etc.
+        """
+        opt = {
+            "env": self._env(),
+        }
+        if self.start_dir is not None:
+            opt["cwd"] = self.start_dir
+        opt.update(kwargs)
+        return opt
+
+    def commit_of(self, ref):
+        return self.cmd0("rev-parse", ref)
+
+    def blob_new(self, f):
+        return self.cmd0("hash-object", "-w", f)
+
+    def get_tree(self, commit):
+        return self.cmd0("rev-parse", commit + "^{tree}")
+
+    def tree_items(self, treeish, name_only=False):
+        args = []
+        if name_only:
+            args.append("--name-only")
+        return self.cmdout("ls-tree", treeish, *args)
+
+    def tree_add_obj(self, cur_tree, path, treeish):
+
+        sep = os.path.sep
+
+        itms = self.tree_items(cur_tree)
+
+        if sep not in path:
+            return self.tree_new(itms, path, treeish)
+
+        # a/b/c -> a, b/c
+        p0, left = path.split(sep, 1)
+        p0item = self.tree_find_item(cur_tree, fn=p0, typ="tree")
+
+        if p0item is None:
+
+            newsubtree = treeish
+            for p in reversed(left.split(sep)):
+                newsubtree = self.tree_new([], p, newsubtree)
+        else:
+
+            subtree = p0item["object"]
+            newsubtree = self.tree_add_obj(subtree, left, treeish)
+
+        return self.tree_new(itms, p0, newsubtree)
+
+    def tree_find_item(self, treeish, fn=None, typ=None):
+        for itm in self.tree_items(treeish):
+            itm = self.parse_tree_item(itm)
+            if fn is not None and itm["fn"] != fn:
+                continue
+            if typ is not None and itm["type"] != typ:
+                continue
+
+            return itm
+        return None
+
+    def parse_tree_item(self, line):
+
+        # git-ls-tree output:
+        #     <mode> SP <type> SP <object> TAB <file>
+        # This output format is compatible with what --index-info --stdin of git update-index expects.
+        # When the -l option is used, format changes to
+        #     <mode> SP <type> SP <object> SP <object size> TAB <file>
+        # E.g.:
+        # 100644 blob a668431ae444a5b68953dc61b4b3c30e066535a2    imsuperman
+        # 040000 tree a668431ae444a5b68953dc61b4b3c30e066535a2    foo
+
+        p, fn = line.split("\t", 1)
+
+        elts = p.split(" ")
+        rst = {
+            "mode": elts[0],
+            "type": elts[1],
+            "object": elts[2],
+            "fn": fn,
+        }
+        if len(elts) == 4:
+            rst["size"] = elts[3]
+
+        return rst
+
+    def tree_new(self, itms, name, obj):
+
+        typ = self.obj_type(obj)
+        item_fmt = "{mode} {typ} {object}\t{name}"
+
+        newitems = [x for x in itms
+                    if self.parse_tree_item(x)["fn"] != name]
+
+        # add a new item
+        if typ == 'tree':
+            mode = "040000"
+        else:
+            mode = "100644"
+        itm = item_fmt.format(mode=mode,
+                              typ=typ,
+                              object=obj,
+                              name=name
+                              )
+        newitems.append(itm)
+        new_treeish = self.cmd0("mktree", stdin="\n".join(newitems))
+        return new_treeish
+
+    def obj_type(self, obj):
+        return self.cmd0("cat-file", "-t", obj)
+
+    def cmd0(self, *args, **kwargs):
+        return cmd0(self.gitpath, *args, **self._opt(**kwargs))
+
+    def cmdout(self, *args, **kwargs):
+        return cmdout(self.gitpath, *args, **self._opt(**kwargs))
+
+    def cmdx(self, *args, **kwargs):
+        return cmdx(self.gitpath, *args, **self._opt(**kwargs))
+
+
+# commit = cmd0(origit, "commit-tree", newtree)
 
 # utils
 
@@ -252,6 +546,7 @@ class ProcError(Exception):
 
     def __str__(self):
         s = [str(self.command) + " " + str(self.arguments),
+             "options: " + str(self.options),
              "exit code: " + str(self.returncode)]
         for l in self.out:
             s.append(l)
@@ -259,6 +554,24 @@ class ProcError(Exception):
         for l in self.err:
             s.append(l)
         return "\n".join(s)
+
+
+def cmd0(cmd, *arguments, **options):
+    """
+    Similar to cmdx, but only return one line of stdout.
+    """
+
+    _, out, _ = cmdx(cmd, *arguments, **options)
+    return out[0]
+
+
+def cmdout(cmd, *arguments, **options):
+    """
+    Similar to cmdx, but only return stdout in a list.
+    """
+
+    _, out, _ = cmdx(cmd, *arguments, **options)
+    return out
 
 
 def cmdx(cmd, *arguments, **options):
@@ -312,6 +625,13 @@ def cmdx(cmd, *arguments, **options):
     return subproc.returncode, out, err
 
 
+def display(out, err):
+    for l in out:
+        _out(1, l)
+    for l in err:
+        _out(2, l)
+
+
 def read_file(path):
     with open(path, 'r') as f:
         return f.read()
@@ -353,6 +673,7 @@ def git_args():
     }
     giftopt = {
         "verbose": False,
+        "gitpath": None,
     }
 
     while True:
@@ -417,6 +738,10 @@ def git_args():
             giftopt["verbose"] = True
             continue
 
+        if arg.startswith('--git='):
+            giftopt["gitpath"] = arg.split('=', 1)[1]
+            continue
+
         break
 
     # push back
@@ -428,14 +753,10 @@ if __name__ == "__main__":
     opt, giftopt, cmds = git_args()
     dd("opt:", opt)
     dd("cmds:", cmds)
-    gift = Gift(".", opt)
+    # TODO test gitpath
+    gift = Gift(".", opt, gitpath=giftopt["gitpath"])
 
     if giftopt["verbose"]:
         verbose = True
 
-    if cmds[0] == "initsub":
-        gift.x_initsub(cmds)
-    elif cmds[0] == "commitsub":
-        gift.x_commitsub(cmds)
-    else:
-        gift.cmd(cmds)
+    gift.cmd(cmds)
