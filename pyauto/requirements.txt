@@ -1,0 +1,7 @@
+#!/usr/bin/env pip install -r
+
+
+pyflakes
+autopep8
+autoflake
+isort
