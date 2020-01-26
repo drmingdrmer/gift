@@ -1,10 +1,6 @@
-remotes:
-    pyauto:   https://github.com/drmingdrmer/pyauto
-
 dirs:
-    pyauto:
-        - pyauto
-        - master
+    pyauto: https://github.com/drmingdrmer/pyauto@master
+    wiki: ssh://git@github.com/drmingdrmer/gift.wiki.git@master
 
 
 # vim: ft=yaml
