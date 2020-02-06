@@ -167,10 +167,8 @@ class Gift(object):
             dd("remote not found, add:", up)
             cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=bareenv)
 
-        try:
-            cmdx(self.gitpath, "rev-parse", "--verify", "--quiet", up["name"] +'/'+ up["branch"], env=bareenv)
-            dd("remote head exists")
-        except ProcError as e:
+        r = g.ref_get(up["name"] +'/'+ up["branch"])
+        if r is None:
             dd("remote head not found:", e)
             dd("need fetch")
             cmdx(self.gitpath, "fetch", up["name"], env=bareenv)
