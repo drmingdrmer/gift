@@ -123,7 +123,7 @@ class Gift(object):
 
         return yml
 
-    def _g(self, what=""):
+    def _g(self, what="", bare=False):
         # TODO cwd
         # TODO git path
         if what == '':
@@ -135,9 +135,13 @@ class Gift(object):
             sb = self.conf["dirs"][what]
         else:
             sb = what
-        return Git(gitpath=self.gitpath,
-                   gitdir=sb["env"]["GIT_DIR"],
-                   working_dir=sb["env"]["GIT_WORK_TREE"])
+        if bare:
+            return Git(gitpath=self.gitpath,
+                       gitdir=sb["env"]["GIT_DIR"])
+        else:
+            return Git(gitpath=self.gitpath,
+                       gitdir=sb["env"]["GIT_DIR"],
+                       working_dir=sb["env"]["GIT_WORK_TREE"])
 
     def check_worktree(self, sb):
         self.try_init_sub_git(sb)
@@ -157,11 +161,10 @@ class Gift(object):
         else:
             dd("gitdir exist:", wtgpath)
 
-        try:
-            cmdx(self.gitpath, "remote", "get-url", up["name"], env=bareenv)
-            dd("remote exists")
-        except ProcError as e:
-            dd("remote not found:", e)
+        g = self._g(sb, bare=True)
+        u = g.remote_get(up["name"])
+        if u is None:
+            dd("remote not found, add:", up)
             cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=bareenv)
 
         try:
@@ -447,7 +450,7 @@ class Git(object):
     def remote_get(self, name):
         try:
             return self.cmd0("remote", "get-url", name)
-        except ProcError as e:
+        except ProcError:
             return None
 
     def tree_items(self, treeish, name_only=False):
