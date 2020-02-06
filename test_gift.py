@@ -178,7 +178,7 @@ class TestGift(BaseTest):
             "path/to/bar/bar",
         ], cwd=emptyp)
 
-        self._fcontent("dirs:\n  path/to/bar: ../bargit\n", emptyp, ".gift")
+        self._fcontent("dirs:\n  path/to/bar: ../bargit@master\n", emptyp, ".gift")
         self._fcontent("\n".join([
                 "- - path/to/bar",
                 "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
