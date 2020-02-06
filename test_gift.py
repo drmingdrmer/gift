@@ -170,7 +170,8 @@ class TestGift(BaseTest):
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)
-        cmdx(giftp, "clone", "--sub", "../bargit", "path/to/bar", cwd=emptyp)
+        a = cmdx(giftp, "clone", "--sub", "../bargit", "path/to/bar", cwd=emptyp)
+        print(a)
         self._gitoutput([giftp, "ls-files"], [
             ".gift",
             ".gift-refs",

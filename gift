@@ -74,6 +74,8 @@ class Gift(object):
         # There is a @ in it
         # gift clone --sub ssh://git@github.com/openacid/celeritasdb.wiki wiki
 
+        print("-------------------")
+        print(remo)
         elts = remo.rsplit("@", 1)
         # if len(elts) == 1:
         #     elts.append("master")
