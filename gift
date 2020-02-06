@@ -169,7 +169,7 @@ class Gift(object):
 
         r = g.ref_get(up["name"] +'/'+ up["branch"])
         if r is None:
-            dd("remote head not found:", e)
+            dd("remote head not found:", up["name"] +'/'+ up["branch"])
             dd("need fetch")
             cmdx(self.gitpath, "fetch", up["name"], env=bareenv)
 
