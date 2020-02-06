@@ -49,7 +49,7 @@ class Gift(object):
     def __init__(self, startpath, opt, gitpath=None):
         self.startpath = startpath
         self.opt = opt
-        self.cwd = "."
+        self.cwd = os.path.abspath(".")
         self.gitpath = gitpath or "git"
 
 
@@ -61,15 +61,22 @@ class Gift(object):
         dd("working_dir:", self.working_dir)
 
         self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+        # self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir")
+        self.git_dir = os.path.abspath(self.git_dir)
         dd("git_dir:", self.git_dir)
 
         self.confpath = self.working_dir + '/' + conffn
         self.conf = self.parse()
 
     def parse_remote(self, subdir, remo):
+
+        # TODO test this:
+        # There is a @ in it
+        # gift clone --sub ssh://git@github.com/openacid/celeritasdb.wiki wiki
+
         elts = remo.rsplit("@", 1)
-        if len(elts) == 1:
-            elts.append("master")
+        # if len(elts) == 1:
+        #     elts.append("master")
         return ["origin", elts[0], elts[1]]
 
 
@@ -140,16 +147,31 @@ class Gift(object):
 
         wtgpath = pj(self.git_dir, sb["sub_gitdir"])
 
-        if os.path.isdir(wtgpath):
-            dd("gitdir exist:", wtgpath)
-            return
+        # TODO inited but not added remote, it will stop for ever
 
-        env = sb['bareenv']
-
+        bareenv = sb['bareenv']
         up = sb["upstream"]
-        cmdx(self.gitpath, "init", "--bare", env["GIT_DIR"])
-        cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=env)
-        cmdx(self.gitpath, "fetch", up["name"], env=env)
+
+        if not os.path.isdir(wtgpath):
+            cmdx(self.gitpath, "init", "--bare", env["GIT_DIR"])
+        else:
+            dd("gitdir exist:", wtgpath)
+
+        try:
+            cmdx(self.gitpath, "remote", "get-url", up["name"], env=bareenv)
+            dd("remote exists")
+        except ProcError as e:
+            dd("remote not found:", e)
+            cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=bareenv)
+
+        try:
+            cmdx(self.gitpath, "rev-parse", "--verify", "--quiet", up["name"] +'/'+ up["branch"], env=bareenv)
+            dd("remote head exists")
+        except ProcError as e:
+            dd("remote head not found:", e)
+            dd("need fetch")
+            cmdx(self.gitpath, "fetch", up["name"], env=bareenv)
+
 
     def try_init_sub_worktree(self, sb):
 
@@ -264,6 +286,9 @@ class Gift(object):
 
     def x_clone_sub(self, cmds):
 
+        # TODO test remove is gift clone --sub ssh://git@github.com/openacid/celeritasdb.wiki wiki
+        # there is a "@" in it.
+        #
         # TODO test ".gift" without "remotes"
         # TODO test clone --sub
         remote = cmds[1]
@@ -418,6 +443,9 @@ class Git(object):
 
     def get_tree(self, commit):
         return self.cmd0("rev-parse", commit + "^{tree}")
+
+    def remote_get(self, name):
+        return self.cmd0("remote", "get-url", name)
 
     def tree_items(self, treeish, name_only=False):
         args = []

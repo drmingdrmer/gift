@@ -68,6 +68,15 @@ class BaseTest(unittest.TestCase):
 
 class TestGit(BaseTest):
 
+    def test_remote_get(self):
+        g = Git(start_dir=superp)
+        t = g.remote_get("abc")
+        self.assertIsNone(t)
+
+        cmdx(origit, "remote", "add", "newremote", "newremote-url", cwd=superp)
+        t = g.remote_get("newremote")
+        self.assertEqual("newremote-url", t)
+
     def test_blob_new(self):
         write_file(pj(superp, "newblob"), "newblob!!!")
         g = Git(start_dir=superp)
