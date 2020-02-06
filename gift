@@ -447,6 +447,12 @@ class Git(object):
     def get_tree(self, commit):
         return self.cmd0("rev-parse", commit + "^{tree}")
 
+    def ref_get(self, name):
+        try:
+            return self.cmd0("rev-parse", "--verify", "--quiet", name)
+        except ProcError:
+            return None
+
     def remote_get(self, name):
         try:
             return self.cmd0("remote", "get-url", name)

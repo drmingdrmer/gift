@@ -68,6 +68,11 @@ class BaseTest(unittest.TestCase):
 
 class TestGit(BaseTest):
 
+    def test_ref_get(self):
+        g = Git(start_dir=superp)
+        t = g.ref_get("abc")
+        self.assertIsNone(t)
+
     def test_remote_get(self):
         g = Git(start_dir=superp)
         t = g.remote_get("abc")
