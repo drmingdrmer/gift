@@ -445,7 +445,10 @@ class Git(object):
         return self.cmd0("rev-parse", commit + "^{tree}")
 
     def remote_get(self, name):
-        return self.cmd0("remote", "get-url", name)
+        try:
+            return self.cmd0("remote", "get-url", name)
+        except ProcError as e:
+            return None
 
     def tree_items(self, treeish, name_only=False):
         args = []
