@@ -159,7 +159,7 @@ class Gift(object):
         up = sb["upstream"]
 
         if not os.path.isdir(wtgpath):
-            cmdx(self.gitpath, "init", "--bare", env["GIT_DIR"])
+            cmdx(self.gitpath, "init", "--bare", bareenv["GIT_DIR"])
         else:
             dd("gitdir exist:", wtgpath)
 
