@@ -73,13 +73,13 @@ class TestGit(BaseTest):
         t = g.ref_get("abc")
         self.assertIsNone(t)
 
-        t = g.get_ref("master")
+        t = g.ref_get("master")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
-        t = g.get_ref("refs/heads/master")
+        t = g.ref_get("refs/heads/master")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
-        t = g.get_ref("c3954c897dfe40a5b99b7145820eeb227210265c")
+        t = g.ref_get("c3954c897dfe40a5b99b7145820eeb227210265c")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
     def test_remote_get(self):
