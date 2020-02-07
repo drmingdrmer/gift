@@ -165,7 +165,7 @@ class Gift(object):
         u = g.remote_get(up["name"])
         if u is None:
             dd("remote not found, add:", up)
-            cmdx(self.gitpath, "remote", "add", up["name"], up["url"], env=bareenv)
+            g.remote_add(up["name"], up["url"])
 
         r = g.ref_get(up["name"] +'/'+ up["branch"])
         if r is None:

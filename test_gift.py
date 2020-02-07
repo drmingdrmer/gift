@@ -40,8 +40,9 @@ barp = pj(this_base, "testdata", "bar")
 def _clean_case():
     for d in ("empty", ):
         p = pj(this_base, "testdata",        d)
-        cmdx(origit, "reset", "--hard",     cwd=p)
-        cmdx(origit, "clean", "-dxf",        cwd=p)
+        if os.path.exists(pj(p, ".git")):
+            cmdx(origit, "reset", "--hard",     cwd=p)
+            cmdx(origit, "clean", "-dxf",        cwd=p)
 
     force_remove(pj(this_base, "testdata", "empty", ".git"))
     force_remove(pj(this_base, "testdata", "super", ".git"))
