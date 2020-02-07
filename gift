@@ -180,14 +180,11 @@ class Gift(object):
         if not os.path.isdir(path):
             os.makedirs(path, mode=0o755)
 
-        # If there is HEAD initialized in sub repo dir
-        try:
-            cmdx(self.gitpath, "rev-parse", "--verify", "--quiet", "HEAD", env=sb["env"])
-            dd("HEAD exists")
-            return
-        except ProcError as e:
-            dd("HEAD not found:", e)
+        g = self._g(sb)
+        if g.ref_get("HEAD") is None:
+            dd("HEAD not found:")
             cmdx(self.gitpath, "checkout", sb['upstream']["branch"], env=sb['env'])
+
 
     def find_parent(self, subdir):
 
