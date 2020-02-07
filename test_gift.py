@@ -2,6 +2,8 @@
 # coding: utf-8
 
 
+# TODO test: commit --sub with dirty work dir
+# TODO commit --sub add history to commit log
 import imp
 import os
 import shutil
