@@ -183,7 +183,7 @@ class Gift(object):
         g = self._g(sb)
         if g.ref_get("HEAD") is None:
             dd("HEAD not found:")
-            cmdx(self.gitpath, "checkout", sb['upstream']["branch"], env=sb['env'])
+            g.checkout(sb['upstream']["branch"])
 
 
     def find_parent(self, subdir):
@@ -438,6 +438,9 @@ class Git(object):
 
     def blob_new(self, f):
         return self.cmd0("hash-object", "-w", f)
+
+    def checkout(self, branch):
+        self.cmdx("checkout", branch)
 
     def fetch(self, name):
         self.cmdx("fetch", name)
