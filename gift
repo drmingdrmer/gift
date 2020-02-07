@@ -457,6 +457,9 @@ class Git(object):
         except ProcError:
             return None
 
+    def remote_get(self, name, url):
+        self.cmdx("remote", "add", name, url)
+
     def tree_items(self, treeish, name_only=False):
         args = []
         if name_only:
