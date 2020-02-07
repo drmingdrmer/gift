@@ -171,7 +171,7 @@ class Gift(object):
         if r is None:
             dd("remote head not found:", up["name"] +'/'+ up["branch"])
             dd("need fetch")
-            cmdx(self.gitpath, "fetch", up["name"], env=bareenv)
+            g.fetch(up["name"])
 
 
     def try_init_sub_worktree(self, sb):
@@ -441,6 +441,9 @@ class Git(object):
 
     def blob_new(self, f):
         return self.cmd0("hash-object", "-w", f)
+
+    def fetch(self, name):
+        self.cmdx("fetch", name)
 
     def get_tree(self, commit):
         return self.cmd0("rev-parse", commit + "^{tree}")
