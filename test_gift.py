@@ -11,6 +11,7 @@ import unittest
 
 gift = imp.load_source('gift', './gift')
 
+ProcError = gift.ProcError
 cmdx = gift.cmdx
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
@@ -193,6 +194,21 @@ class TestGit(BaseTest):
 
 
 class TestGift(BaseTest):
+
+    def test_error_output(self):
+        e = None
+        try:
+            cmdx(giftp, "abc")
+        except ProcError as ee:
+            e = ee
+
+        self.assertEqual(1, e.returncode)
+        self.assertEqual([], e.out)
+        self.assertEqual("git: 'abc' is not a git command. See 'git --help'.", e.err[0])
+
+        # there should not raw python error returned
+        self.assertNotIn('Traceback', "".join(e.out))
+        self.assertNotIn('Traceback', "".join(e.err))
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)

@@ -592,6 +592,18 @@ class ProcError(Exception):
         s = [str(self.command) + " " + str(self.arguments),
              "options: " + str(self.options),
              "exit code: " + str(self.returncode)]
+
+        for l in self.out:
+            s.append(l)
+
+        for l in self.err:
+            s.append(l)
+        return "\n".join(s)
+
+    def __repr__(self):
+        s = [str(self.command) + " " + str(self.arguments),
+             "options: " + str(self.options),
+             "exit code: " + str(self.returncode)]
         for l in self.out:
             s.append(l)
 
@@ -803,4 +815,11 @@ if __name__ == "__main__":
     if giftopt["verbose"]:
         verbose = True
 
-    gift.cmd(cmds)
+    try:
+        gift.cmd(cmds)
+    except ProcError as e:
+        for l in e.out:
+            _out(1, l)
+        for l in e.err:
+            _out(2, l)
+        sys.exit(e.returncode)
