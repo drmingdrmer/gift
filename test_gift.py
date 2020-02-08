@@ -13,6 +13,7 @@ gift = imp.load_source('gift', './gift')
 
 ProcError = gift.ProcError
 cmdx = gift.cmdx
+cmd_tty = gift.cmd_tty
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
 read_file = gift.read_file
@@ -56,6 +57,7 @@ def _clean_case():
 class BaseTest(unittest.TestCase):
 
     def setUp(self):
+        self.maxDiff = None
 
         _clean_case()
 
@@ -209,6 +211,42 @@ class TestGift(BaseTest):
         # there should not raw python error returned
         self.assertNotIn('Traceback', "".join(e.out))
         self.assertNotIn('Traceback', "".join(e.err))
+
+    def test_cmd_tty(self):
+        # TODO this test does not belongs to gift
+        code, out, err = cmd_tty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+
+        self.assertEqual(0, code)
+        # self.assertEqual([
+        #         '\x1b[?1h\x1b=\r\x1b[33mcommit c3954c897dfe40a5b99b7145820eeb227210265c\x1b[m\x1b[33m (\x1b[m\x1b[1;36mHEAD -> \x1b[m\x1b[1;32mmaster\x1b[m\x1b[33m)\x1b[m\x1b[m\r',
+        #         'Author: drdr xp <drdr.xp@gmail.com>\x1b[m\r',
+        #         'Date:   Fri Jan 24 15:01:01 2020 +0800\x1b[m\r',
+        #         '\x1b[m\r',
+        #         '    add super\x1b[m\r',
+        #         '\r\x1b[K\x1b[?1l\x1b>'
+        # ], out, "pseudo tty cheat git to output colored output")
+        self.assertIn("\x1b[33", out[0])
+        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", out[0])
+        self.assertIn("drdr xp", out[1])
+        self.assertEqual([
+        ], err)
+
+    def test_interactive_mode(self):
+        _, out, err = cmd_tty(giftp, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+
+        # self.assertEqual([
+        #         '\x1b[?1h\x1b=\r\x1b[33mcommit c3954c897dfe40a5b99b7145820eeb227210265c\x1b[m\x1b[33m (\x1b[m\x1b[1;36mHEAD -> \x1b[m\x1b[1;32mmaster\x1b[m\x1b[33m)\x1b[m\x1b[m\r',
+        #         'Author: drdr xp <drdr.xp@gmail.com>\x1b[m\r',
+        #         'Date:   Fri Jan 24 15:01:01 2020 +0800\x1b[m\r',
+        #         '\x1b[m\r',
+        #         '    add super\x1b[m\r',
+        #         '\r\x1b[K\x1b[?1l\x1b>'
+        # ], out, "delegated git command should output color")
+        self.assertIn("\x1b[33", out[0])
+        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", out[0])
+        self.assertIn("drdr xp", out[1])
+
+        self.assertEqual([], err)
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)

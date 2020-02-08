@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+import select
 import os
 import subprocess
 import sys
+import pty
 
 import yaml
 
@@ -262,9 +264,10 @@ class Gift(object):
                 elif cmd == 'reset':
                     return self.x_reset_sub(cmds)
 
+        # TODO run gift in a git-dir
+
         # delegate to original git
-        _, out, err = cmdx(self.gitpath, *cmds, env=env)
-        display(out, err)
+        cmd_interactive(self.gitpath, *cmds, env=env)
 
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
@@ -679,6 +682,100 @@ def cmdx(cmd, *arguments, **options):
         raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
 
     return subproc.returncode, out, err
+
+def cmd_tty(cmd, *arguments, **options):
+
+    # TODO doc
+
+    # make a pseudo tty to cheat git
+
+    dd("command:", cmd, arguments, options)
+
+    close_fds = options.get('close_fds', True)
+    shell = options.get('shell', False)
+    cwd = options.get('cwd', None)
+    env = options.get('env', None)
+    if env is not None:
+        env = dict(os.environ, **env)
+
+    arguments = [_bytes(x) for x in arguments]
+
+    master_fd, slave_fd = pty.openpty()
+    err_master_fd, err_slave_fd = pty.openpty()
+
+    subproc = subprocess.Popen([cmd] + list(arguments),
+                               close_fds=close_fds,
+                               shell=shell,
+                               cwd=cwd,
+                               env=env,
+                               stdout=slave_fd,
+                               stderr=err_slave_fd,
+    )
+
+    out = []
+    err = []
+    while subproc.poll() is None:
+        r, _, _ = select.select([err_master_fd, master_fd], [], [], 0.01)
+        if master_fd in r:
+            o = os.read(master_fd, 10240)
+            out.append(o)
+        if err_master_fd in r:
+            o = os.read(err_master_fd, 10240)
+            err.append(o)
+
+    out = b"".join(out)
+    err = b"".join(err)
+
+    out = _str(out)
+    err = _str(err)
+
+    if out != '':
+        out = out.strip("\n").split("\n")
+        for l in out:
+            dd("stdout:", l)
+    else:
+        out = []
+
+    if err != '':
+        err = err.strip("\n").split("\n")
+        for l in err:
+            dd("stderr:", l)
+    else:
+        err = []
+
+    if subproc.returncode != 0:
+        raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
+
+    return subproc.returncode, out, err
+def cmd_interactive(cmd, *arguments, **options):
+
+    # interactive mode, delegate stdin to sub proc
+    # and sub proc output directly to super proc stdout
+    dd("command:", cmd, arguments, options)
+
+    close_fds = options.get('close_fds', True)
+    cwd = options.get('cwd', None)
+    shell = options.get('shell', False)
+    env = options.get('env', None)
+    if env is not None:
+        env = dict(os.environ, **env)
+
+    arguments = [_bytes(x) for x in arguments]
+
+    subproc = subprocess.Popen([cmd] + list(arguments),
+                               close_fds=close_fds,
+                               shell=shell,
+                               cwd=cwd,
+                               env=env,
+    )
+
+    subproc.communicate()
+    subproc.wait()
+
+    if subproc.returncode != 0:
+        raise ProcError(subproc.returncode, [], [], cmd, arguments, options)
+
+    return subproc.returncode, [], []
 
 
 def display(out, err):
