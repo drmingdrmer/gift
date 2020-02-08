@@ -270,6 +270,22 @@ class TestGift(BaseTest):
                     'fatal: this operation must be run in a work tree'
             ], e.err)
 
+    # def test_no_gift_file(self):
+    #     workdir = emptyp
+    #     cmdx(giftp, "init", cwd=workdir)
+
+    #     # TODO
+    #     try:
+    #         cmdx(giftp, "commit", "--sub", cwd=workdir)
+    #     except ProcError as e:
+    #         self.assertEqual(2, e.returncode)
+    #         self.assertEqual([], e.out)
+    #         self.assertEqual([
+    #                 "No .gift found in:" + workdir,
+    #                 "To add sub repo:",
+    #                 "    git clone --sub <url> <path>",
+    #         ], e.err)
+
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)
         a = cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)

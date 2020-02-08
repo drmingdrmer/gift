@@ -47,9 +47,9 @@ def pabs(*args):
 class GiftError(Exception):
     def __init__(self, msg):
         super(GiftError, self).__init__(msg)
+        self.returncode = 2
         self.out=[]
         self.err = [msg]
-        self.returncode = 2
 
 
 class Gift(object):
