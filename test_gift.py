@@ -33,6 +33,7 @@ origit = "git"
 
 emptyp = pj(this_base, "testdata", "empty")
 superp = pj(this_base, "testdata", "super")
+supergitp = pj(this_base, "testdata", "supergit")
 subbarp = pj(this_base, "testdata", "super", "foo", "bar")
 subwowp = pj(this_base, "testdata", "super", "foo", "wow")
 bargitp = pj(this_base, "testdata", "bargit")
@@ -217,6 +218,7 @@ class TestGift(BaseTest):
         code, out, err = cmd_tty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
 
         self.assertEqual(0, code)
+        # on ci: the output lack of: '\x1b[?1h\x1b=\r'
         # self.assertEqual([
         #         '\x1b[?1h\x1b=\r\x1b[33mcommit c3954c897dfe40a5b99b7145820eeb227210265c\x1b[m\x1b[33m (\x1b[m\x1b[1;36mHEAD -> \x1b[m\x1b[1;32mmaster\x1b[m\x1b[33m)\x1b[m\x1b[m\r',
         #         'Author: drdr xp <drdr.xp@gmail.com>\x1b[m\r',
@@ -247,6 +249,26 @@ class TestGift(BaseTest):
         self.assertIn("drdr xp", out[1])
 
         self.assertEqual([], err)
+
+    def test_in_git_dir(self):
+
+        cmdx(giftp, "log", "-n1", cwd=supergitp)
+
+        try:
+            cmdx(giftp, "commit", "--sub", cwd=supergitp)
+        except ProcError as e:
+            self.assertEqual(2, e.returncode)
+            self.assertEqual([], e.out)
+            self.assertEqual(["--sub can not be used in git-dir:" + supergitp], e.err)
+
+        try:
+            cmdx(giftp, "status", cwd=supergitp)
+        except ProcError as e:
+            self.assertEqual(128, e.returncode)
+            self.assertEqual([], e.out)
+            self.assertEqual([
+                    'fatal: this operation must be run in a work tree'
+            ], e.err)
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)

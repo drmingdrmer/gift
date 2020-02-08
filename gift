@@ -40,6 +40,17 @@ def _out(f, line):
 def pj(*args):
     return os.path.join(*args)
 
+def pabs(*args):
+    p = os.path.abspath(pj(*args))
+    return os.path.normpath(p)
+
+class GiftError(Exception):
+    def __init__(self, msg):
+        super(GiftError, self).__init__(msg)
+        self.out=[]
+        self.err = [msg]
+        self.returncode = 2
+
 
 class Gift(object):
     """
@@ -51,26 +62,34 @@ class Gift(object):
     def __init__(self, startpath, opt, gitpath=None):
         self.startpath = startpath
         self.opt = opt
-        self.cwd = os.path.abspath(".")
+        self.cwd = pabs(".")
         self.gitpath = gitpath or "git"
+        self.in_git_dir = False
 
 
     def init_git_config(self):
+
+        self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+        self.git_dir = pabs(self.git_dir)
+        dd("git_dir:", self.git_dir)
+
+        if (self.cwd.startswith(self.git_dir + '/')
+            or self.git_dir == self.cwd):
+            self.in_git_dir = True
+
+        if self.in_git_dir:
+            return
 
         # TODO test non git dir
         self.working_dir = cmd0(self.gitpath, "rev-parse", "--show-toplevel", cwd=self.cwd)
         # TODO test working_dir
         dd("working_dir:", self.working_dir)
 
-        self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
-        # self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir")
-        self.git_dir = os.path.abspath(self.git_dir)
-        dd("git_dir:", self.git_dir)
-
         self.confpath = self.working_dir + '/' + conffn
         self.conf = self.parse()
 
     def parse_remote(self, subdir, remo):
+        # TODO use regex to detect
 
         # TODO test this:
         # There is a @ in it
@@ -222,34 +241,31 @@ class Gift(object):
 
         self.init_git_config()
 
-        subdir = "."
-        subdir, sb = self.find_parent(subdir)
-        dd("subdir:", subdir, sb)
+        cmd, issub, cmds = self._arg_param(cmds)
 
         refs0 = self._get_head_refs()
 
-        env = None
-        if sb is not None:
-            self.check_worktree(sb)
-            env = sb["env"]
-
-        # TODO nested?
-        if len(cmds) >= 2:
-            cmd = cmds[0]
-
-            if '--' in cmds:
-                i = cmds.index('--')
-                args = cmds[:i]
-                left = cmds[i + 1:]
+        if self.in_git_dir:
+            if issub:
+                raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                args = cmds
-                left = []
+                # delegate to original git
+                cmd_interactive(self.gitpath, *cmds, env=None)
+        else:
 
-            if '--sub' in args:
-                # remove "--sub"
-                i = args.index('--sub')
-                args = args[:i] + args[i+1:]
-                cmds = args + left
+            subdir = "."
+            subdir, sb = self.find_parent(subdir)
+            dd("subdir:", subdir, sb)
+
+
+            env = None
+            if sb is not None:
+                self.check_worktree(sb)
+                env = sb["env"]
+
+
+            # TODO nested?
+            if issub:
 
                 if cmd == "init":
                     return self.x_init_sub(cmds)
@@ -264,14 +280,31 @@ class Gift(object):
                 elif cmd == 'reset':
                     return self.x_reset_sub(cmds)
 
-        # TODO run gift in a git-dir
+            # TODO run gift in a git-dir
 
-        # delegate to original git
-        cmd_interactive(self.gitpath, *cmds, env=env)
+            # delegate to original git
+            cmd_interactive(self.gitpath, *cmds, env=env)
 
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
             self._populate_ref(refs1)
+
+    def _arg_param(self, cmds):
+
+        cmd = cmds[0]
+        cmds = cmds[1:]
+
+        if '--' in cmds:
+            i = cmds.index('--')
+            args = cmds[:i]
+        else:
+            args = cmds
+
+        issub = '--sub' in args
+        if issub:
+            cmds.remove('--sub')
+
+        return cmd, issub, [cmd] + cmds
 
     def _get_head_refs(self):
         try:
@@ -435,6 +468,9 @@ class Git(object):
             opt["cwd"] = self.start_dir
         opt.update(kwargs)
         return opt
+
+    # def url_valid(self, url):
+    #     /(?:git|ssh|https?|git@[-\w.]+):(\/\/)?(.*?)(\.git)(\/?|\#[-\d\w._]+?)$/;
 
     def commit_of(self, ref):
         return self.cmd0("rev-parse", ref)
@@ -747,6 +783,7 @@ def cmd_tty(cmd, *arguments, **options):
         raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
 
     return subproc.returncode, out, err
+
 def cmd_interactive(cmd, *arguments, **options):
 
     # interactive mode, delegate stdin to sub proc
@@ -920,3 +957,10 @@ if __name__ == "__main__":
         for l in e.err:
             _out(2, l)
         sys.exit(e.returncode)
+    except GiftError as e:
+        for l in e.out:
+            _out(1, l)
+        for l in e.err:
+            _out(2, l)
+        sys.exit(e.returncode)
+
