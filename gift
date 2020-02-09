@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-import select
 import os
+import pty
+import select
 import subprocess
 import sys
-import pty
 
 import yaml
 
@@ -40,15 +40,17 @@ def _out(f, line):
 def pj(*args):
     return os.path.join(*args)
 
+
 def pabs(*args):
     p = os.path.abspath(pj(*args))
     return os.path.normpath(p)
+
 
 class GiftError(Exception):
     def __init__(self, msg):
         super(GiftError, self).__init__(msg)
         self.returncode = 2
-        self.out=[]
+        self.out = []
         self.err = [msg]
 
 
@@ -66,7 +68,6 @@ class Gift(object):
         self.gitpath = gitpath or "git"
         self.in_git_dir = False
 
-
     def init_git_config(self):
 
         self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
@@ -74,7 +75,7 @@ class Gift(object):
         dd("git_dir:", self.git_dir)
 
         if (self.cwd.startswith(self.git_dir + '/')
-            or self.git_dir == self.cwd):
+                or self.git_dir == self.cwd):
             self.in_git_dir = True
 
         if self.in_git_dir:
@@ -100,7 +101,6 @@ class Gift(object):
         #     elts.append("master")
         return ["origin", elts[0], elts[1]]
 
-
     def read_conf(self):
         try:
             with open(self.confpath, 'r') as f:
@@ -108,7 +108,7 @@ class Gift(object):
         except OSError:
             # TODO info of no config
             return {
-                    "dirs": {}
+                "dirs": {}
             }
         yml = yaml.safe_load(cont)
         return yml
@@ -188,12 +188,11 @@ class Gift(object):
             dd("remote not found, add:", up)
             g.remote_add(up["name"], up["url"])
 
-        r = g.ref_get(up["name"] +'/'+ up["branch"])
+        r = g.ref_get(up["name"] + '/' + up["branch"])
         if r is None:
-            dd("remote head not found:", up["name"] +'/'+ up["branch"])
+            dd("remote head not found:", up["name"] + '/' + up["branch"])
             dd("need fetch")
             g.fetch(up["name"])
-
 
     def try_init_sub_worktree(self, sb):
 
@@ -205,7 +204,6 @@ class Gift(object):
         if g.ref_get("HEAD") is None:
             dd("HEAD not found:")
             g.checkout(sb['upstream']["branch"])
-
 
     def get_subrepo_config(self, subdir):
 
@@ -257,12 +255,10 @@ class Gift(object):
             subdir, sb = self.get_subrepo_config(subdir)
             dd("subdir:", subdir, sb)
 
-
             env = None
             if sb is not None:
                 self.check_worktree(sb)
                 env = sb["env"]
-
 
             # TODO nested?
             if issub:
@@ -337,11 +333,10 @@ class Gift(object):
 
         g = self._g()
         g.cmdx("add", self.confpath)
-        g.cmdx("commit", self.confpath, "-m", "add sub repo: " + remote + " in "+ subdir)
+        g.cmdx("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir)
 
         self.x_init_sub([])
         self.x_commit_sub([])
-
 
     def x_init_sub(self, cmds):
         for sub in self.conf["dirs"]:
@@ -468,9 +463,6 @@ class Git(object):
             opt["cwd"] = self.start_dir
         opt.update(kwargs)
         return opt
-
-    # def url_valid(self, url):
-    #     /(?:git|ssh|https?|git@[-\w.]+):(\/\/)?(.*?)(\.git)(\/?|\#[-\d\w._]+?)$/;
 
     def commit_of(self, ref):
         return self.cmd0("rev-parse", ref)
@@ -719,6 +711,7 @@ def cmdx(cmd, *arguments, **options):
 
     return subproc.returncode, out, err
 
+
 def cmd_tty(cmd, *arguments, **options):
 
     # TODO doc
@@ -746,7 +739,7 @@ def cmd_tty(cmd, *arguments, **options):
                                env=env,
                                stdout=slave_fd,
                                stderr=err_slave_fd,
-    )
+                               )
 
     out = []
     err = []
@@ -784,6 +777,7 @@ def cmd_tty(cmd, *arguments, **options):
 
     return subproc.returncode, out, err
 
+
 def cmd_interactive(cmd, *arguments, **options):
 
     # interactive mode, delegate stdin to sub proc
@@ -804,7 +798,7 @@ def cmd_interactive(cmd, *arguments, **options):
                                shell=shell,
                                cwd=cwd,
                                env=env,
-    )
+                               )
 
     subproc.communicate()
     subproc.wait()
@@ -963,4 +957,3 @@ if __name__ == "__main__":
         for l in e.err:
             _out(2, l)
         sys.exit(e.returncode)
-
