@@ -23,6 +23,7 @@ dd = gift.dd
 _bytes = gift._bytes
 
 Git = gift.Git
+Gift = gift.Gift
 
 
 # root of this repo
@@ -196,6 +197,29 @@ class TestGit(BaseTest):
         ], files)
 
 
+class TestGiftAPI(BaseTest):
+    def test_get_subrepo_config(self):
+        gg = Gift(superp, {}, gitpath=origit)
+        gg.init_git_config()
+
+        rel, sb = gg.get_subrepo_config(pj(superp, "f"))
+        self.assertEqual(('', None), (rel, sb), "inexistent path")
+
+        rel, sb = gg.get_subrepo_config(pj(superp, "foo"))
+        self.assertEqual(('', None), (rel, sb), "inexistent path foo")
+
+        rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
+        self.assertEqual('foo/bar', rel)
+        self.assertEqual({
+                'bareenv': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar'},
+                'dir': 'foo/bar',
+                'env': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar',
+                        'GIT_WORK_TREE': this_base + '/testdata/super/foo/bar'},
+                'refhead': 'refs/gift/sub/foo/bar',
+                'sub_gitdir': 'gift/subdir/foo/bar',
+                'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
+        }, sb)
+
 class TestGift(BaseTest):
 
     def test_error_output(self):
@@ -318,6 +342,10 @@ class TestGift(BaseTest):
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subwowp)
             self._gitoutput([giftp, "ls-files"], [".gift", "imsuperman"], cwd=superp)
+
+
+    def test_init_with_half_sub_git_dir(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
 
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=superp)

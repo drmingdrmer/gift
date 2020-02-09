@@ -62,7 +62,7 @@ class Gift(object):
     def __init__(self, startpath, opt, gitpath=None):
         self.startpath = startpath
         self.opt = opt
-        self.cwd = pabs(".")
+        self.cwd = pabs(self.startpath)
         self.gitpath = gitpath or "git"
         self.in_git_dir = False
 
@@ -207,7 +207,7 @@ class Gift(object):
             g.checkout(sb['upstream']["branch"])
 
 
-    def find_parent(self, subdir):
+    def get_subrepo_config(self, subdir):
 
         working_dir = self.working_dir
         subdir = os.path.abspath(subdir)
@@ -254,7 +254,7 @@ class Gift(object):
         else:
 
             subdir = "."
-            subdir, sb = self.find_parent(subdir)
+            subdir, sb = self.get_subrepo_config(subdir)
             dd("subdir:", subdir, sb)
 
 
