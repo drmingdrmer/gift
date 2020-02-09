@@ -73,6 +73,37 @@ class BaseTest(unittest.TestCase):
             return
         _clean_case()
 
+    def _remove_super_ref(self):
+        cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subbarp)
+        cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subwowp)
+
+    def _check_initial_superhead(self):
+        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", out[0])
+
+        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subwowp)
+        self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", out[0])
+
+    def _add_file_to_subbar(self):
+        write_file(pj(subbarp, "newbar"), "newbar")
+        cmdx(giftp, "add", "newbar", cwd=subbarp)
+        cmdx(giftp, "commit", "-m", "add newbar", cwd=subbarp)
+
+        # TODO test no .gift file
+
+    def _gitoutput(self, cmds, lines, **kwargs):
+        _, out, _ = cmdx(*cmds, **kwargs)
+        self.assertEqual(lines, out)
+
+    def _nofile(self, *ps):
+        self.assertFalse(os.path.isfile(pj(*ps)), "no file in " + pj(*ps))
+
+    def _fcontent(self, txt, *ps):
+        self.assertTrue(os.path.isfile(pj(*ps)), pj(*ps) + " should exist")
+
+        actual = read_file(pj(*ps))
+        self.assertEqual(txt, actual, "check file content")
+
 
 class TestGit(BaseTest):
 
@@ -198,6 +229,7 @@ class TestGit(BaseTest):
 
 
 class TestGiftAPI(BaseTest):
+
     def test_get_subrepo_config(self):
         gg = Gift(superp, {}, gitpath=origit)
         gg.init_git_config()
@@ -221,8 +253,61 @@ class TestGiftAPI(BaseTest):
         }, sb)
 
 
-class TestGift(BaseTest):
+class TestGiftPartialInit(BaseTest):
 
+    def setUp(self):
+        super(TestGiftPartialInit, self).setUp()
+
+        gg = Gift(superp, {}, gitpath=origit)
+        gg.init_git_config()
+
+        rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
+        self.gg = gg
+        self.sb = sb
+        self.rel = rel
+
+    def test_init_1_with_inited(self):
+
+        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._fcontent("bar\n", subbarp, "bar")
+
+    def test_init_2_with_remote(self):
+
+        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._fcontent("bar\n", subbarp, "bar")
+
+    def test_init_3_with_fetched(self):
+
+        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
+        cmdx(origit, "fetch", self.sb['upstream']['name'], env=self.sb['bareenv'], cwd=superp)
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._fcontent("bar\n", subbarp, "bar")
+
+    def test_init_4_already_checkout(self):
+
+        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
+        cmdx(origit, "fetch", self.sb['upstream']['name'], env=self.sb['bareenv'], cwd=superp)
+
+        os.makedirs(self.sb['env']['GIT_WORK_TREE'], mode=0o755)
+        cmdx(origit, "checkout", self.sb['upstream']['branch'], env=self.sb['env'])
+        self._fcontent("bar\n", subbarp, "bar")
+
+        os.unlink(pj(subbarp, "bar"))
+
+        # init --sub should not checkout again to modify work tree
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._nofile(subbarp, "bar")
+
+
+class TestGift(BaseTest):
     def test_error_output(self):
         e = None
         try:
@@ -342,9 +427,6 @@ class TestGift(BaseTest):
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subwowp)
             self._gitoutput([giftp, "ls-files"], [".gift", "imsuperman"], cwd=superp)
-
-    def test_init_with_half_sub_git_dir(self):
-        cmdx(giftp, "init", "--sub", cwd=superp)
 
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
@@ -521,37 +603,6 @@ class TestGift(BaseTest):
         head_of_bar_after_checkout = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
         self.assertNotEqual(head_of_bar, head_of_bar_after_checkout)
-
-    def _remove_super_ref(self):
-        cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subbarp)
-        cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subwowp)
-
-    def _check_initial_superhead(self):
-        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
-        self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", out[0])
-
-        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subwowp)
-        self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", out[0])
-
-    def _add_file_to_subbar(self):
-        write_file(pj(subbarp, "newbar"), "newbar")
-        cmdx(giftp, "add", "newbar", cwd=subbarp)
-        cmdx(giftp, "commit", "-m", "add newbar", cwd=subbarp)
-
-        # TODO test no .gift file
-
-    def _gitoutput(self, cmds, lines, **kwargs):
-        _, out, _ = cmdx(*cmds, **kwargs)
-        self.assertEqual(lines, out)
-
-    def _nofile(self, *ps):
-        self.assertFalse(os.path.isfile(pj(*ps)), "no file in " + pj(*ps))
-
-    def _fcontent(self, txt, *ps):
-        self.assertTrue(os.path.isfile(pj(*ps)), pj(*ps) + " should exist")
-
-        actual = read_file(pj(*ps))
-        self.assertEqual(txt, actual, "check file content")
 
 
 def force_remove(fn):
