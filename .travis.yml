@@ -12,5 +12,11 @@ install:
 script:
   - python -m unittest -c -v --failfast
 
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
+
 # after_success:
 #   - pip install python-coveralls && coveralls
