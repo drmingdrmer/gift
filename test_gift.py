@@ -43,10 +43,10 @@ barp = pj(this_base, "testdata", "bar")
 
 def _clean_case():
     for d in ("empty", ):
-        p = pj(this_base, "testdata",        d)
+        p = pj(this_base, "testdata", d)
         if os.path.exists(pj(p, ".git")):
-            cmdx(origit, "reset", "--hard",     cwd=p)
-            cmdx(origit, "clean", "-dxf",        cwd=p)
+            cmdx(origit, "reset", "--hard", cwd=p)
+            cmdx(origit, "clean", "-dxf", cwd=p)
 
     force_remove(pj(this_base, "testdata", "empty", ".git"))
     force_remove(pj(this_base, "testdata", "super", ".git"))
@@ -211,14 +211,15 @@ class TestGiftAPI(BaseTest):
         rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
         self.assertEqual('foo/bar', rel)
         self.assertEqual({
-                'bareenv': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar'},
-                'dir': 'foo/bar',
-                'env': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar',
-                        'GIT_WORK_TREE': this_base + '/testdata/super/foo/bar'},
-                'refhead': 'refs/gift/sub/foo/bar',
-                'sub_gitdir': 'gift/subdir/foo/bar',
-                'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
+            'bareenv': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar'},
+            'dir': 'foo/bar',
+            'env': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar',
+                    'GIT_WORK_TREE': this_base + '/testdata/super/foo/bar'},
+            'refhead': 'refs/gift/sub/foo/bar',
+            'sub_gitdir': 'gift/subdir/foo/bar',
+            'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
         }, sb)
+
 
 class TestGift(BaseTest):
 
@@ -291,7 +292,7 @@ class TestGift(BaseTest):
             self.assertEqual(128, e.returncode)
             self.assertEqual([], e.out)
             self.assertEqual([
-                    'fatal: this operation must be run in a work tree'
+                'fatal: this operation must be run in a work tree'
             ], e.err)
 
     # def test_no_gift_file(self):
@@ -322,12 +323,11 @@ class TestGift(BaseTest):
 
         self._fcontent("dirs:\n  path/to/bar: ../bargit@master\n", emptyp, ".gift")
         self._fcontent("\n".join([
-                "- - path/to/bar",
-                "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
-                "", 
+            "- - path/to/bar",
+            "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
+            "",
         ]), emptyp, ".gift-refs")
         self._fcontent("bar\n", emptyp, "path/to/bar/bar")
-
 
     def test_init_sub(self):
         self._nofile(subbarp, "bar")
@@ -342,7 +342,6 @@ class TestGift(BaseTest):
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
             self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subwowp)
             self._gitoutput([giftp, "ls-files"], [".gift", "imsuperman"], cwd=superp)
-
 
     def test_init_with_half_sub_git_dir(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
