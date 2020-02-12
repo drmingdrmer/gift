@@ -14,6 +14,7 @@ if hasattr(sys, 'getfilesystemencoding'):
 if defenc is None:
     defenc = sys.getdefaultencoding()
 
+version = '0.1.0'
 conffn = ".gift"
 refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
@@ -225,6 +226,28 @@ class Gift(object):
             subdir, _ = os.path.split(subdir)
         else:
             return '', None
+
+    def simple_cmd(self, cmds):
+        cmd = cmds[0]
+        if cmd == '--version':
+            _out(1, "gift version " + version)
+            self.delegate(['--version'], env=None)
+        elif cmd == '--help':
+            self.delegate(['--help'], env=None)
+            lines = [
+                "",
+                "Gift extended command:",
+                "",
+                "gift clone --sub <url>@<branch> <dir>",
+                "    Add a sub-repo to <dir> by clone it from <url>, and checkout <branch>",
+                "",
+                "gift commit --sub",
+                "    Add all sub-repo to super-repo and commit",
+                "",
+            ]
+            # TODO finish them
+            for l in lines:
+                _out(1, l)
 
     def cmd(self, cmds):
 
@@ -860,6 +883,10 @@ def _str(bs):
     return bs
 
 
+def cmd_ver():
+    cmdx()
+
+
 def git_args():
     args = sys.argv[1:]
     opt = {
@@ -874,20 +901,24 @@ def git_args():
         "super_prefix": None,
     }
     giftopt = {
+        "simple_cmd": None,
         "verbose": False,
         "gitpath": None,
     }
     # TODO test: "gift" without cmd should not raise
 
-    while True:
+    while len(args) > 0:
         arg = args.pop(0)
 
-        if arg == '--version':
-            cmd_ver()
-            return
-        if arg == '--help':
-            cmd_help()
-            return
+        if arg in ('--version',
+                   '--help',
+                   '--html-path',
+                   '--info-path',
+                   '--man-path',
+                   ):
+            giftopt['simple_cmd'] = arg
+            continue
+
         if arg == '-C':
             opt["startpath"] = args.pop(0)
             continue
@@ -898,15 +929,6 @@ def git_args():
         if arg.startswith('--exec-path='):
             # TODO ignored
             continue
-        if arg == '--html-path':
-            cmd_html_path()
-            return
-        if arg == '--man-path':
-            cmd_man_path()
-            return
-        if arg == '--info-path':
-            cmd_info_path()
-            return
         if arg in ('-p', '--paginate'):
             opt["paging"] = True
             continue
@@ -970,7 +992,10 @@ if __name__ == "__main__":
         sys.exit(0)
 
     try:
-        gift.cmd(cmds)
+        if giftopt['simple_cmd'] is not None:
+            gift.simple_cmd([giftopt['simple_cmd']])
+        else:
+            gift.cmd(cmds)
     except ProcError as e:
         for l in e.out:
             _out(1, l)

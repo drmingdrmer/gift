@@ -257,19 +257,19 @@ class TestGiftAPI(BaseTest):
     def test_make_opt(self):
 
         base = {
-                'confkv':[], 
+            'confkv': [],
         }
 
         cases = [
-            (None, []), 
-            (True, ['--paginate']), 
-            (False, ['--no-pager']), 
+            (None, []),
+            (True, ['--paginate']),
+            (False, ['--no-pager']),
         ]
         for v, expect in cases:
 
             opt = {}
             opt.update(base)
-            opt.update({'paging':v})
+            opt.update({'paging': v})
 
             gg = Gift(superp, opt, gitpath=origit)
             self.assertEqual(expect, gg.make_opt())
@@ -331,42 +331,54 @@ class TestGiftPartialInit(BaseTest):
 
 class TestGiftDelegate(BaseTest):
 
+    def test_opt_version(self):
+        out = cmdout(giftp, "--version", cwd=superp)
+        self.assertEqual('gift version 0.1.0', out[0])
+        self.assertEqual(2, len(out))
+
+    def test_opt_help(self):
+        out = cmdout(giftp, "--help", cwd=superp)
+        self.assertIn('These are common Git commands used in various situations:', out)
+        self.assertIn('Gift extended command:', out)
+        self.assertIn('gift clone --sub <url>@<branch> <dir>', out)
+
     def test_opt_paging(self):
         out = cmdout(giftp, "--git=" + echop, "gift-debug", cwd=superp)
         self.assertIn('paging: null', out)
 
-        out = cmdout(giftp, "--git=" + echop, '-p',  "gift-debug", cwd=superp)
+        out = cmdout(giftp, "--git=" + echop, '-p', "gift-debug", cwd=superp)
         self.assertIn('paging: true', out)
 
-        out = cmdout(giftp, "--git=" + echop, '--paginate',  "gift-debug", cwd=superp)
+        out = cmdout(giftp, "--git=" + echop, '--paginate', "gift-debug", cwd=superp)
         self.assertIn('paging: true', out)
 
-        out = cmdout(giftp, "--git=" + echop, '--no-pager',  "gift-debug", cwd=superp)
+        out = cmdout(giftp, "--git=" + echop, '--no-pager', "gift-debug", cwd=superp)
         self.assertIn('paging: false', out)
 
     def test_opt_git(self):
         out = cmdout(giftp, "--git=" + echop, "-p", "gift-debug", cwd=superp)
         self.assertEqual([
-                'gift-debug',
-                'bare: false',
-                'confkv: []',
-                'git_dir: null',
-                'namespace: null',
-                'no_replace_objects: false',
-                'paging: true',
-                'startpath: .',
-                'super_prefix: null',
-                'work_tree: null',
-                '',
-                'gitpath: ' + this_base + '/echo.py',
-                'verbose: false', 
+            'gift-debug',
+            'bare: false',
+            'confkv: []',
+            'git_dir: null',
+            'namespace: null',
+            'no_replace_objects: false',
+            'paging: true',
+            'startpath: .',
+            'super_prefix: null',
+            'work_tree: null',
+            '',
+            'gitpath: ' + this_base + '/echo.py',
+            'simple_cmd: null',
+            'verbose: false',
         ], out)
 
     def test_opt_minus_c(self):
         code, out, err = cmd_tty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
         self.assertEqual(0, code)
         self.assertEqual([
-                'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
+            'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
         ], out)
         self.assertEqual([], err)
 
@@ -423,6 +435,7 @@ class TestGiftDelegate(BaseTest):
         self.assertIn("drdr xp", o)
 
         self.assertEqual([], err)
+
 
 class TestGift(BaseTest):
     def test_in_git_dir(self):
