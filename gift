@@ -91,15 +91,7 @@ class Gift(object):
         self.conf = self.parse()
 
     def parse_remote(self, subdir, remo):
-        # TODO use regex to detect
-
-        # TODO test this:
-        # There is a @ in it
-        # gift clone --sub ssh://git@github.com/openacid/celeritasdb.wiki wiki
-
         elts = remo.rsplit("@", 1)
-        # if len(elts) == 1:
-        #     elts.append("master")
         return ["origin", elts[0], elts[1]]
 
     def read_conf(self):
@@ -171,8 +163,6 @@ class Gift(object):
     def try_init_sub_git(self, sb):
 
         wtgpath = pj(self.git_dir, sb["sub_gitdir"])
-
-        # TODO inited but not added remote, it will stop for ever
 
         bareenv = sb['bareenv']
         up = sb["upstream"]
