@@ -40,6 +40,7 @@ subbarp = pj(this_base, "testdata", "super", "foo", "bar")
 subwowp = pj(this_base, "testdata", "super", "foo", "wow")
 bargitp = pj(this_base, "testdata", "bargit")
 barp = pj(this_base, "testdata", "bar")
+echop = pj(this_base, "echo.py")
 
 
 def _clean_case():
@@ -253,6 +254,26 @@ class TestGiftAPI(BaseTest):
             'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
         }, sb)
 
+    def test_make_opt(self):
+
+        base = {
+                'confkv':[], 
+        }
+
+        cases = [
+            (None, []), 
+            (True, ['--paginate']), 
+            (False, ['--no-pager']), 
+        ]
+        for v, expect in cases:
+
+            opt = {}
+            opt.update(base)
+            opt.update({'paging':v})
+
+            gg = Gift(superp, opt, gitpath=origit)
+            self.assertEqual(expect, gg.make_opt())
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -309,6 +330,37 @@ class TestGiftPartialInit(BaseTest):
 
 
 class TestGiftDelegate(BaseTest):
+
+    def test_opt_paging(self):
+        out = cmdout(giftp, "--git=" + echop, "gift-debug", cwd=superp)
+        self.assertIn('paging: null', out)
+
+        out = cmdout(giftp, "--git=" + echop, '-p',  "gift-debug", cwd=superp)
+        self.assertIn('paging: true', out)
+
+        out = cmdout(giftp, "--git=" + echop, '--paginate',  "gift-debug", cwd=superp)
+        self.assertIn('paging: true', out)
+
+        out = cmdout(giftp, "--git=" + echop, '--no-pager',  "gift-debug", cwd=superp)
+        self.assertIn('paging: false', out)
+
+    def test_opt_git(self):
+        out = cmdout(giftp, "--git=" + echop, "-p", "gift-debug", cwd=superp)
+        self.assertEqual([
+                'gift-debug',
+                'bare: false',
+                'confkv: []',
+                'git_dir: null',
+                'namespace: null',
+                'no_replace_objects: false',
+                'paging: true',
+                'startpath: .',
+                'super_prefix: null',
+                'work_tree: null',
+                '',
+                'gitpath: ' + this_base + '/echo.py',
+                'verbose: false', 
+        ], out)
 
     def test_opt_minus_c(self):
         code, out, err = cmd_tty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)

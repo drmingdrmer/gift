@@ -146,7 +146,6 @@ class Gift(object):
 
     def _g(self, what="", bare=False):
         # TODO cwd
-        # TODO git path
         if what == '':
             return Git(gitpath=self.gitpath,
                        gitdir=self.git_dir,
@@ -207,6 +206,7 @@ class Gift(object):
 
     def get_subrepo_config(self, subdir):
 
+        # TODO test subdir not in working_dir?
         working_dir = self.working_dir
         subdir = os.path.abspath(subdir)
 
@@ -294,11 +294,11 @@ class Gift(object):
             rst.append('-c')
             rst.append(kv)
 
-        # if self.opt['paging']:
-        #     rst.append('--paginate')
-        # else:
-        #     rst.append('--no-pager')
-
+        if self.opt['paging'] is not None:
+            if self.opt['paging']:
+                rst.append('--paginate')
+            else:
+                rst.append('--no-pager')
 
         return rst
 
@@ -865,7 +865,7 @@ def git_args():
     opt = {
         "startpath": ".",
         "confkv": [],
-        "paging": False,
+        "paging": None,
         "no_replace_objects": False,
         "bare": False,
         "git_dir": None,
@@ -957,12 +957,17 @@ if __name__ == "__main__":
     dd("opt:", opt)
     dd("cmds:", cmds)
     # TODO need to pass opt to delegated command
-    # TODO test gitpath
     # TODO test change remote/up['branch'] then init again.
     gift = Gift(".", opt, gitpath=giftopt["gitpath"])
 
     if giftopt["verbose"]:
         verbose = True
+
+    if cmds[0] == 'gift-debug':
+        _out(1, ' '.join(cmds))
+        _out(1, yaml.dump(opt))
+        _out(1, yaml.dump(giftopt))
+        sys.exit(0)
 
     try:
         gift.cmd(cmds)
