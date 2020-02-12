@@ -247,8 +247,7 @@ class Gift(object):
             if issub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                # delegate to original git
-                cmd_interactive(self.gitpath, *cmds, env=None)
+                self.delegate(cmds, env=None)
         else:
 
             subdir = "."
@@ -278,12 +277,30 @@ class Gift(object):
 
             # TODO run gift in a git-dir
 
-            # delegate to original git
-            cmd_interactive(self.gitpath, *cmds, env=env)
+            self.delegate(cmds, env=env)
 
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
             self._populate_ref(refs1)
+
+    def delegate(self, cmds, env=None):
+        # delegate to original git
+        opts = self.make_opt()
+        cmd_interactive(self.gitpath, *opts, *cmds, env=env)
+
+    def make_opt(self):
+        rst = []
+        for kv in self.opt['confkv']:
+            rst.append('-c')
+            rst.append(kv)
+
+        # if self.opt['paging']:
+        #     rst.append('--paginate')
+        # else:
+        #     rst.append('--no-pager')
+
+
+        return rst
 
     def _arg_param(self, cmds):
 
@@ -759,14 +776,14 @@ def cmd_tty(cmd, *arguments, **options):
     err = _str(err)
 
     if out != '':
-        out = out.strip("\n").split("\n")
+        out = out.splitlines()
         for l in out:
             dd("stdout:", l)
     else:
         out = []
 
     if err != '':
-        err = err.strip("\n").split("\n")
+        err = err.splitlines()
         for l in err:
             dd("stderr:", l)
     else:
@@ -782,7 +799,8 @@ def cmd_interactive(cmd, *arguments, **options):
 
     # interactive mode, delegate stdin to sub proc
     # and sub proc output directly to super proc stdout
-    dd("command:", cmd, arguments, options)
+    dd("interactive command:", cmd, arguments, options)
+    dd(' '.join([cmd] + list(arguments)))
 
     close_fds = options.get('close_fds', True)
     cwd = options.get('cwd', None)
@@ -859,6 +877,7 @@ def git_args():
         "verbose": False,
         "gitpath": None,
     }
+    # TODO test: "gift" without cmd should not raise
 
     while True:
         arg = args.pop(0)
@@ -937,7 +956,9 @@ if __name__ == "__main__":
     opt, giftopt, cmds = git_args()
     dd("opt:", opt)
     dd("cmds:", cmds)
+    # TODO need to pass opt to delegated command
     # TODO test gitpath
+    # TODO test change remote/up['branch'] then init again.
     gift = Gift(".", opt, gitpath=giftopt["gitpath"])
 
     if giftopt["verbose"]:

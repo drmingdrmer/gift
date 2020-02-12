@@ -13,6 +13,7 @@ gift = imp.load_source('gift', './gift')
 
 ProcError = gift.ProcError
 cmdx = gift.cmdx
+cmd_interactive = gift.cmd_interactive
 cmd_tty = gift.cmd_tty
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
@@ -307,7 +308,16 @@ class TestGiftPartialInit(BaseTest):
         self._nofile(subbarp, "bar")
 
 
-class TestGift(BaseTest):
+class TestGiftDelegate(BaseTest):
+
+    def test_opt_minus_c(self):
+        code, out, err = cmd_tty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
+        self.assertEqual(0, code)
+        self.assertEqual([
+                'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
+        ], out)
+        self.assertEqual([], err)
+
     def test_error_output(self):
         e = None
         try:
@@ -337,9 +347,10 @@ class TestGift(BaseTest):
         #         '    add super\x1b[m\r',
         #         '\r\x1b[K\x1b[?1l\x1b>'
         # ], out, "pseudo tty cheat git to output colored output")
-        self.assertIn("\x1b[33", out[0])
-        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", out[0])
-        self.assertIn("drdr xp", out[1])
+        o = ''.join(out)
+        self.assertIn("\x1b[33", o)
+        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", o)
+        self.assertIn("drdr xp", o)
         self.assertEqual([
         ], err)
 
@@ -354,12 +365,14 @@ class TestGift(BaseTest):
         #         '    add super\x1b[m\r',
         #         '\r\x1b[K\x1b[?1l\x1b>'
         # ], out, "delegated git command should output color")
-        self.assertIn("\x1b[33", out[0])
-        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", out[0])
-        self.assertIn("drdr xp", out[1])
+        o = ''.join(out)
+        self.assertIn("\x1b[33", o)
+        self.assertIn("commit c3954c897dfe40a5b99b7145820eeb227210265c", o)
+        self.assertIn("drdr xp", o)
 
         self.assertEqual([], err)
 
+class TestGift(BaseTest):
     def test_in_git_dir(self):
 
         cmdx(giftp, "log", "-n1", cwd=supergitp)
