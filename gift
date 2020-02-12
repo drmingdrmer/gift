@@ -978,3 +978,6 @@ if __name__ == "__main__":
         for l in e.err:
             _out(2, l)
         sys.exit(e.returncode)
+    except KeyboardInterrupt:
+        _out(2, "user interrupted")
+        sys.exit(1)
