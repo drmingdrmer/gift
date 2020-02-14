@@ -241,9 +241,12 @@ class Gift(object):
             # TODO finish them
             for l in lines:
                 _out(1, l)
-        elif cmd == '--exec-path':
-            # /usr/local/Cellar/git/2.17.0/libexec/git-core
-            self.delegate(['--exec-path'])
+        elif cmd in ('--exec-path',
+                     '--man-path',
+                     '--info-path',
+                     '--html-path',
+                     ):
+            self.delegate([cmd])
 
     def cmd(self, cmds):
 

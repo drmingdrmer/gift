@@ -357,6 +357,15 @@ class TestGiftDelegate(BaseTest):
         out = cmdout(giftp, '--no-pager', "gift-debug", cwd=superp)
         self.assertIn('paging: false', out)
 
+    def test_opt_manual_paths(self):
+        man_path = cmd0(origit, '--man-path')
+        info_path = cmd0(origit, '--info-path')
+        html_path = cmd0(origit, '--html-path')
+
+        self.assertEqual(man_path, cmd0(giftp, '--man-path'))
+        self.assertEqual(info_path, cmd0(giftp, '--info-path'))
+        self.assertEqual(html_path, cmd0(giftp, '--html-path'))
+
     def test_opt_exec_path(self):
         rst = cmd0(giftp, "--exec-path")
         self.assertEqual(execpath, rst)
