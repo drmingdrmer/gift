@@ -8,6 +8,7 @@ import imp
 import os
 import shutil
 import unittest
+import tempfile
 
 gift = imp.load_source('gift', './gift')
 
@@ -235,7 +236,11 @@ class TestGit(BaseTest):
 class TestGiftAPI(BaseTest):
 
     def test_get_subrepo_config(self):
-        gg = Gift(superp, {})
+        gg = Gift({
+                'startpath':[superp],
+                'git_dir':None,
+                'work_tree':None, 
+        })
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "f"))
@@ -260,6 +265,9 @@ class TestGiftAPI(BaseTest):
 
         base = {
             'confkv': [],
+                'startpath':[superp],
+                'git_dir':None,
+                'work_tree':None, 
         }
 
         cases = [
@@ -273,7 +281,7 @@ class TestGiftAPI(BaseTest):
             opt.update(base)
             opt.update({'paging': v})
 
-            gg = Gift(superp, opt)
+            gg = Gift(opt)
             self.assertEqual(expect, gg.make_opt())
 
 
@@ -282,7 +290,12 @@ class TestGiftPartialInit(BaseTest):
     def setUp(self):
         super(TestGiftPartialInit, self).setUp()
 
-        gg = Gift(superp, {})
+        gg = Gift({
+        'startpath': [superp],
+                'git_dir':None,
+                'work_tree':None, 
+
+        })
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
@@ -386,12 +399,16 @@ class TestGiftDelegate(BaseTest):
             'namespace: null',
             'no_replace_objects: false',
             'paging: true',
-            'startpath: .',
+            'startpath: []',
             'super_prefix: null',
             'work_tree: null',
             '',
             'simple_cmd: null',
             'verbose: false',
+                '', 
+                'evaluated cwd: ' + this_base +'/testdata/super',
+                'evaluated git_dir: None',
+                'evaluated working_dir: None', 
         ], out)
 
     def test_opt_minus_c(self):
@@ -401,6 +418,55 @@ class TestGiftDelegate(BaseTest):
             'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
         ], out)
         self.assertEqual([], err)
+
+    def test_opt_git_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = cmdout(giftp, '--git-dir=' + supergitp, "log", "-n1", cwd=tmpdir)
+
+        self.assertEqual( [
+                'commit c3954c897dfe40a5b99b7145820eeb227210265c',
+                'Author: drdr xp <drdr.xp@gmail.com>',
+                'Date:   Fri Jan 24 15:01:01 2020 +0800',
+                '',
+                '    add super' ], out)
+
+    def test_opt_worktree(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = cmdout(giftp,
+                         '--git-dir=' + supergitp,
+                         '--work-tree=' + tmpdir, 
+                         "log", "-n1", cwd=".")
+
+        self.assertEqual( [
+                'commit c3954c897dfe40a5b99b7145820eeb227210265c',
+                'Author: drdr xp <drdr.xp@gmail.com>',
+                'Date:   Fri Jan 24 15:01:01 2020 +0800',
+                '',
+                '    add super' ], out)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = cmdout(giftp,
+                         '--git-dir=' + supergitp,
+                         '--work-tree=' + tmpdir,
+                         "diff",
+                         "--name-only",
+                         "--relative",
+                         "HEAD",
+                         cwd=".")
+
+        self.assertEqual( ['.gift', 'imsuperman'] , out)
+
+    def test_opt_big_c(self):
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = cmdout(giftp,
+                         '-C', this_base, 
+                         '--git-dir=' + pj('testdata', 'supergit'),
+                         '--work-tree=' + pj("testdata", 'super'),
+                         "ls-files",
+                         cwd=tmpdir)
+
+        self.assertEqual( ['.gift', 'imsuperman'] , out)
 
     def test_error_output(self):
         e = None
@@ -590,6 +656,7 @@ class TestGift(BaseTest):
         # we should fetch and got the latest commit.
 
         cmdx(giftp, "fetch", "--sub", cwd=superp)
+
         fetched_hash = cmd0(giftp, "rev-parse", "origin/master", cwd=subbarp)
 
         self.assertEqual(headhash, fetched_hash)

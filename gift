@@ -62,20 +62,60 @@ class Gift(object):
     # inside gitdir:
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
-    def __init__(self, startpath, opt):
-        self.startpath = startpath
+    def __init__(self, opt):
         self.opt = opt
-        self.cwd = pabs(self.startpath)
         if opt.get('exec_path') is None:
             self.gitpath = 'git'
         else:
             self.gitpath = pj(opt['exec_path'], 'git')
         self.in_git_dir = False
 
+        # When multiple -C options are given, each subsequent non-absolute -C
+        # <path> is interpreted relative to the preceding -C <path>.
+
+        st = pabs(".")
+        for p in opt['startpath']:
+            st = self._init_path(st, p)
+
+        self.startpath = st
+        self.cwd = self.startpath
+
+        self.git_dir = self._init_path(self.startpath, opt['git_dir'])
+        self.working_dir = self._init_path(self.startpath, opt['work_tree'])
+
+
+    def _get_super_opt(self):
+        opt = {
+                'cwd': self.cwd,
+                'env': {
+                }
+        }
+        if self.git_dir is not None:
+            opt['env']['GIT_DIR'] = self.git_dir
+        if self.working_dir is not None:
+            opt['env']['GIT_WORK_TREE'] = self.working_dir
+        return opt
+
+
+    def _init_path(self, base, p):
+        if p is None:
+            return None
+        if os.path.isabs(p):
+            return p
+
+        if base is None:
+            return pabs(p)
+
+        return pabs(base, p)
+
     def init_git_config(self):
 
-        self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
-        self.git_dir = pabs(self.git_dir)
+        git_dir_specified = self.git_dir is not None
+
+        if self.git_dir is None:
+            self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+            self.git_dir = pabs(self.git_dir)
+
         dd("git_dir:", self.git_dir)
 
         if (self.cwd.startswith(self.git_dir + '/')
@@ -85,8 +125,19 @@ class Gift(object):
         if self.in_git_dir:
             return
 
-        # TODO test non git dir
-        self.working_dir = cmd0(self.gitpath, "rev-parse", "--show-toplevel", cwd=self.cwd)
+        # git rev-parse --show-toplevel:
+        # - With --git-dir=xx, it always returns current dir.
+        # - Without --git-dir=xx, it might fail if cwd is not in a git repo
+        if git_dir_specified:
+            if self.working_dir is None:
+                self.working_dir = self.cwd
+            else:
+                pass
+        else:
+            if self.working_dir is None:
+                # TODO test non git dir
+                self.working_dir = cmd0(self.gitpath, "rev-parse", "--show-toplevel", cwd=self.cwd)
+
         # TODO test working_dir
         dd("working_dir:", self.working_dir)
 
@@ -207,16 +258,20 @@ class Gift(object):
         dd("working_dir:", working_dir)
         dd("subdir:", subdir)
 
+        rel = os.path.relpath(subdir, working_dir)
+        if rel.startswith('..'):
+            dd("subdir is not in working_dir")
+            return '', None
+
         dd("conf:", self.conf["dirs"])
 
-        while subdir != working_dir:
-            reldir = subdir[len(working_dir) + 1:]
-            dd("reldir:", reldir)
-            if reldir in self.conf["dirs"]:
-                return reldir, self.conf["dirs"][reldir]
+        while rel != '':
+            dd("reldir:", rel)
+            if rel in self.conf["dirs"]:
+                return rel, self.conf["dirs"][rel]
 
             # trim last part.
-            subdir, _ = os.path.split(subdir)
+            rel, _ = os.path.split(rel)
         else:
             return '', None
 
@@ -250,6 +305,8 @@ class Gift(object):
 
     def cmd(self, cmds):
 
+        dd("gift cmd:", cmds)
+
         # If a command does not need to be run inside a git repo, delegate it
         # and quit.
         if cmds[0] == "init" and '--sub' not in cmds:
@@ -269,17 +326,15 @@ class Gift(object):
             if issub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                self.delegate(cmds, env=None)
+                self.delegate(cmds, **self._get_super_opt())
         else:
 
-            subdir = "."
+            subdir = self.cwd
             subdir, sb = self.get_subrepo_config(subdir)
             dd("subdir:", subdir, sb)
 
-            env = None
             if sb is not None:
                 self.check_worktree(sb)
-                env = sb["env"]
 
             # TODO nested?
             if issub:
@@ -297,18 +352,20 @@ class Gift(object):
                 elif cmd == 'reset':
                     return self.x_reset_sub(cmds)
 
-            # TODO run gift in a git-dir
-
-            self.delegate(cmds, env=env)
+            if sb is not None:
+                self.delegate(cmds, env=sb['env'], cwd=self.cwd)
+            else:
+                # TODO run gift in a git-dir
+                self.delegate(cmds, **self._get_super_opt())
 
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
             self._populate_ref(refs1)
 
-    def delegate(self, cmds, env=None):
+    def delegate(self, cmds, cwd=None, env=None):
         # delegate to original git
         opts = self.make_opt()
-        cmd_interactive(self.gitpath, *opts, *cmds, env=env)
+        cmd_interactive(self.gitpath, *opts, *cmds, cwd=cwd, env=env)
 
     def make_opt(self):
         rst = []
@@ -342,8 +399,10 @@ class Gift(object):
         return cmd, issub, [cmd] + cmds
 
     def _get_head_refs(self):
+        g = self._g()
         try:
-            cont = cmd0(self.gitpath, "show", "HEAD:" + refsfn)
+            # TODO should not cmd0
+            cont = g.cmd0("show", "HEAD:" + refsfn)
         except ProcError:
             return None
 
@@ -885,7 +944,7 @@ def _str(bs):
 def git_args():
     args = sys.argv[1:]
     opt = {
-        "startpath": ".",
+        "startpath": [],
         "confkv": [],
         "paging": None,
         "no_replace_objects": False,
@@ -916,7 +975,7 @@ def git_args():
             continue
 
         if arg == '-C':
-            opt["startpath"] = args.pop(0)
+            opt["startpath"].append(args.pop(0))
             continue
         if arg == '-c':
             opt["confkv"].append(args.pop(0))
@@ -971,7 +1030,7 @@ if __name__ == "__main__":
     dd("cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
-    gift = Gift(".", opt)
+    gift = Gift(opt)
 
     if giftopt["verbose"]:
         verbose = True
@@ -984,6 +1043,9 @@ if __name__ == "__main__":
         _out(1, ' '.join(cmds))
         _out(1, yaml.dump(opt))
         _out(1, yaml.dump(giftopt))
+        _out(1, "evaluated cwd: " + str(gift.cwd))
+        _out(1, "evaluated git_dir: " + str(gift.git_dir))
+        _out(1, "evaluated working_dir: " + str(gift.working_dir))
         sys.exit(0)
 
     try:
