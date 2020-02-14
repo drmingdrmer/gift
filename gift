@@ -882,10 +882,6 @@ def _str(bs):
     return bs
 
 
-def cmd_ver():
-    cmdx()
-
-
 def git_args():
     args = sys.argv[1:]
     opt = {
@@ -904,8 +900,8 @@ def git_args():
         "simple_cmd": None,
         "verbose": False,
     }
-    # TODO test: "gift" without cmd should not raise
 
+    cmds = args
     while len(args) > 0:
         arg = args.pop(0)
 
@@ -962,10 +958,10 @@ def git_args():
             giftopt["verbose"] = True
             continue
 
+        # push back
+        cmds = [arg] + args
         break
 
-    # push back
-    cmds = [arg] + args
     return opt, giftopt, cmds
 
 
@@ -980,7 +976,11 @@ if __name__ == "__main__":
     if giftopt["verbose"]:
         verbose = True
 
-    if cmds[0] == 'gift-debug':
+    if cmds == [] and giftopt['simple_cmd'] is None:
+        gift.simple_cmd(['--help'])
+        sys.exit(1)
+
+    if cmds != [] and cmds[0] == 'gift-debug':
         _out(1, ' '.join(cmds))
         _out(1, yaml.dump(opt))
         _out(1, yaml.dump(giftopt))
@@ -992,16 +992,10 @@ if __name__ == "__main__":
         else:
             gift.cmd(cmds)
     except ProcError as e:
-        for l in e.out:
-            _out(1, l)
-        for l in e.err:
-            _out(2, l)
+        display(e.out, e.err)
         sys.exit(e.returncode)
     except GiftError as e:
-        for l in e.out:
-            _out(1, l)
-        for l in e.err:
-            _out(2, l)
+        display(e.out, e.err)
         sys.exit(e.returncode)
     except KeyboardInterrupt:
         _out(2, "user interrupted")

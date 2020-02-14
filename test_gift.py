@@ -417,6 +417,22 @@ class TestGiftDelegate(BaseTest):
         self.assertNotIn('Traceback', "".join(e.out))
         self.assertNotIn('Traceback', "".join(e.err))
 
+    def test_no_cmd(self):
+        e = None
+        try:
+            cmdx(giftp)
+        except ProcError as ee:
+            e = ee
+
+        self.assertEqual(1, e.returncode)
+        self.assertIn("usage: git", e.out[0], "stderr output git help")
+        self.assertIn('Gift extended command:', e.out, "help with gift info")
+        self.assertEqual([], e.err)
+
+        # there should not raw python error returned
+        self.assertNotIn('Traceback', "".join(e.out))
+        self.assertNotIn('Traceback', "".join(e.err))
+
     def test_cmd_tty(self):
         # TODO this test does not belongs to gift
         code, out, err = cmd_tty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
