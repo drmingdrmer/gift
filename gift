@@ -991,10 +991,12 @@ def git_args():
             continue
 
         if arg == '--no-replace-objects':
+            # TODO 
             opt["no_replace_objects"] = True
             continue
 
         if arg == '--bare':
+            # TODO 
             opt["bare"] = True
             continue
 
@@ -1007,9 +1009,11 @@ def git_args():
             continue
 
         if arg.startswith('--namespace='):
+            # TODO 
             opt["namespace"] = arg.split('=', 1)[1]
             continue
         if arg.startswith('--super-prefix='):
+            # TODO 
             opt["super_prefix"] = arg.split('=', 1)[1]
             continue
 
