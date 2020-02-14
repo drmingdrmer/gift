@@ -42,6 +42,8 @@ bargitp = pj(this_base, "testdata", "bargit")
 barp = pj(this_base, "testdata", "bar")
 echop = pj(this_base, "echo.py")
 
+execpath = cmd0(origit, '--exec-path')
+
 
 def _clean_case():
     for d in ("empty", ):
@@ -233,7 +235,7 @@ class TestGit(BaseTest):
 class TestGiftAPI(BaseTest):
 
     def test_get_subrepo_config(self):
-        gg = Gift(superp, {}, gitpath=origit)
+        gg = Gift(superp, {})
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "f"))
@@ -271,7 +273,7 @@ class TestGiftAPI(BaseTest):
             opt.update(base)
             opt.update({'paging': v})
 
-            gg = Gift(superp, opt, gitpath=origit)
+            gg = Gift(superp, opt)
             self.assertEqual(expect, gg.make_opt())
 
 
@@ -280,7 +282,7 @@ class TestGiftPartialInit(BaseTest):
     def setUp(self):
         super(TestGiftPartialInit, self).setUp()
 
-        gg = Gift(superp, {}, gitpath=origit)
+        gg = Gift(superp, {})
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
@@ -343,24 +345,34 @@ class TestGiftDelegate(BaseTest):
         self.assertIn('gift clone --sub <url>@<branch> <dir>', out)
 
     def test_opt_paging(self):
-        out = cmdout(giftp, "--git=" + echop, "gift-debug", cwd=superp)
+        out = cmdout(giftp, "gift-debug", cwd=superp)
         self.assertIn('paging: null', out)
 
-        out = cmdout(giftp, "--git=" + echop, '-p', "gift-debug", cwd=superp)
+        out = cmdout(giftp, '-p', "gift-debug", cwd=superp)
         self.assertIn('paging: true', out)
 
-        out = cmdout(giftp, "--git=" + echop, '--paginate', "gift-debug", cwd=superp)
+        out = cmdout(giftp, '--paginate', "gift-debug", cwd=superp)
         self.assertIn('paging: true', out)
 
-        out = cmdout(giftp, "--git=" + echop, '--no-pager', "gift-debug", cwd=superp)
+        out = cmdout(giftp, '--no-pager', "gift-debug", cwd=superp)
         self.assertIn('paging: false', out)
 
-    def test_opt_git(self):
-        out = cmdout(giftp, "--git=" + echop, "-p", "gift-debug", cwd=superp)
+    def test_opt_exec_path(self):
+        rst = cmd0(giftp, "--exec-path")
+        self.assertEqual(execpath, rst)
+
+        rst = cmd0(giftp, "--exec-path", "--exec-path=" + execpath)
+        self.assertEqual(execpath, rst)
+
+        rst = cmd0(giftp, "--exec-path=" + execpath, "--exec-path")
+        self.assertEqual(execpath, rst)
+
+        out = cmdout(giftp, "--exec-path=/foo/", "-p", "gift-debug", cwd=superp)
         self.assertEqual([
             'gift-debug',
             'bare: false',
             'confkv: []',
+            'exec_path: /foo/',
             'git_dir: null',
             'namespace: null',
             'no_replace_objects: false',
@@ -369,7 +381,6 @@ class TestGiftDelegate(BaseTest):
             'super_prefix: null',
             'work_tree: null',
             '',
-            'gitpath: ' + this_base + '/echo.py',
             'simple_cmd: null',
             'verbose: false',
         ], out)

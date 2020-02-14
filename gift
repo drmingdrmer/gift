@@ -62,11 +62,14 @@ class Gift(object):
     # inside gitdir:
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
-    def __init__(self, startpath, opt, gitpath=None):
+    def __init__(self, startpath, opt):
         self.startpath = startpath
         self.opt = opt
         self.cwd = pabs(self.startpath)
-        self.gitpath = gitpath or "git"
+        if opt.get('exec_path') is None:
+            self.gitpath = 'git'
+        else:
+            self.gitpath = pj(opt['exec_path'], 'git')
         self.in_git_dir = False
 
     def init_git_config(self):
@@ -238,6 +241,9 @@ class Gift(object):
             # TODO finish them
             for l in lines:
                 _out(1, l)
+        elif cmd == '--exec-path':
+            # /usr/local/Cellar/git/2.17.0/libexec/git-core
+            self.delegate(['--exec-path'])
 
     def cmd(self, cmds):
 
@@ -889,11 +895,11 @@ def git_args():
         "work_tree": None,
         "namespace": None,
         "super_prefix": None,
+        "exec_path": None,
     }
     giftopt = {
         "simple_cmd": None,
         "verbose": False,
-        "gitpath": None,
     }
     # TODO test: "gift" without cmd should not raise
 
@@ -905,6 +911,7 @@ def git_args():
                    '--html-path',
                    '--info-path',
                    '--man-path',
+                   '--exec-path',
                    ):
             giftopt['simple_cmd'] = arg
             continue
@@ -915,9 +922,8 @@ def git_args():
         if arg == '-c':
             opt["confkv"].append(args.pop(0))
             continue
-        # if arg == '--exec-path[=<path>]':
         if arg.startswith('--exec-path='):
-            # TODO ignored
+            opt["exec_path"] = arg.split('=', 1)[1]
             continue
         if arg in ('-p', '--paginate'):
             opt["paging"] = True
@@ -953,10 +959,6 @@ def git_args():
             giftopt["verbose"] = True
             continue
 
-        if arg.startswith('--git='):
-            giftopt["gitpath"] = arg.split('=', 1)[1]
-            continue
-
         break
 
     # push back
@@ -970,7 +972,7 @@ if __name__ == "__main__":
     dd("cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
-    gift = Gift(".", opt, gitpath=giftopt["gitpath"])
+    gift = Gift(".", opt)
 
     if giftopt["verbose"]:
         verbose = True
