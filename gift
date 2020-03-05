@@ -722,7 +722,6 @@ def cmdx(cmd, *arguments, **options):
 
     stack = inspect.stack()[1:]
     for i, (frame, path, ln, func, line, xx) in enumerate(stack):
-        dd("frame:", frame)
         dd("stack:", ln, func, line, xx)
 
     options['check'] = True
@@ -770,12 +769,6 @@ def _bytes(s):
     if isinstance(s, str):
         return bytes(s, defenc)
     return bytes(str(s), defenc)
-
-
-def _str(bs):
-    if isinstance(bs, bytes):
-        return bs.decode(defenc, 'surrogateescape')
-    return bs
 
 
 def git_args():
