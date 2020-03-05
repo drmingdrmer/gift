@@ -727,15 +727,8 @@ def cmdx(cmd, *arguments, **options):
 
     options['check'] = True
     code, out, err = pykit3proc.command(cmd, *arguments, **options)
-    # TODO out is never None
-    if out is None:
-        out = []
-    else:
-        out = out.splitlines()
-    if err is None:
-        err = []
-    else:
-        err = err.splitlines()
+    out = out.splitlines()
+    err = err.splitlines()
     return code, out, err
 
 
