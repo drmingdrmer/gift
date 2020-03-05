@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+import inspect
 import os
-import pty
-import select
-import subprocess
 import sys
-import pykit3proc
 
 import yaml
+
+import pykit3proc
 
 if hasattr(sys, 'getfilesystemencoding'):
     defenc = sys.getfilesystemencoding()
@@ -84,19 +83,17 @@ class Gift(object):
         self.git_dir = self._init_path(self.startpath, opt['git_dir'])
         self.working_dir = self._init_path(self.startpath, opt['work_tree'])
 
-
     def _get_super_opt(self):
         opt = {
-                'cwd': self.cwd,
-                'env': {
-                }
+            'cwd': self.cwd,
+            'env': {
+            }
         }
         if self.git_dir is not None:
             opt['env']['GIT_DIR'] = self.git_dir
         if self.working_dir is not None:
             opt['env']['GIT_WORK_TREE'] = self.working_dir
         return opt
-
 
     def _init_path(self, base, p):
         if p is None:
@@ -115,6 +112,7 @@ class Gift(object):
 
         if self.git_dir is None:
             self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+            dd("git_dir:", self.git_dir)
             self.git_dir = pabs(self.git_dir)
 
         dd("git_dir:", self.git_dir)
@@ -470,7 +468,7 @@ class Gift(object):
         statehash = g.blob_new(statep)
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
 
-        newcommit = g.cmd0("commit-tree", "-p", parent, supertree, stdin="commit subdirs")
+        newcommit = g.cmd0("commit-tree", "-p", parent, supertree, input="commit subdirs")
         g.cmdx("reset", newcommit)
 
         self._populate_ref(refs)
@@ -679,7 +677,7 @@ class Git(object):
                               name=name
                               )
         newitems.append(itm)
-        new_treeish = self.cmd0("mktree", stdin="\n".join(newitems))
+        new_treeish = self.cmd0("mktree", input="\n".join(newitems))
         return new_treeish
 
     def obj_type(self, obj):
@@ -700,213 +698,58 @@ class Git(object):
 # utils
 
 
-class ProcError(Exception):
-
-    def __init__(self, returncode, out, err, cmd, arguments, options):
-
-        super(ProcError, self).__init__(returncode,
-                                        out,
-                                        err,
-                                        cmd,
-                                        arguments,
-                                        options)
-
-        self.returncode = returncode
-        self.out = out
-        self.err = err
-        self.command = cmd
-        self.arguments = arguments
-        self.options = options
-
-    def __str__(self):
-        s = [str(self.command) + " " + str(self.arguments),
-             "options: " + str(self.options),
-             "exit code: " + str(self.returncode)]
-
-        for l in self.out:
-            s.append(l)
-
-        for l in self.err:
-            s.append(l)
-        return "\n".join(s)
-
-    def __repr__(self):
-        s = [str(self.command) + " " + str(self.arguments),
-             "options: " + str(self.options),
-             "exit code: " + str(self.returncode)]
-        for l in self.out:
-            s.append(l)
-
-        for l in self.err:
-            s.append(l)
-        return "\n".join(s)
+ProcError = pykit3proc.CalledProcessError
 
 
 def cmd0(cmd, *arguments, **options):
-    """
-    Similar to cmdx, but only return one line of stdout.
-    """
+    dd("cmd0:", cmd, arguments, options)
 
     _, out, _ = cmdx(cmd, *arguments, **options)
+    dd("cmd0: out:", out)
     return out[0]
 
 
 def cmdout(cmd, *arguments, **options):
-    """
-    Similar to cmdx, but only return stdout in a list.
-    """
+    dd("cmdout:", cmd, arguments, options)
 
     _, out, _ = cmdx(cmd, *arguments, **options)
+    dd("cmdout: out:", out)
     return out
 
 
 def cmdx(cmd, *arguments, **options):
+    dd("cmdx:", cmd, arguments, options)
 
-    dd("command:", cmd, arguments, options)
+    stack = inspect.stack()[1:]
+    for i, (frame, path, ln, func, line, xx) in enumerate(stack):
+        dd("frame:", frame)
+        dd("stack:", ln, func, line, xx)
 
-    close_fds = options.get('close_fds', True)
-    cwd = options.get('cwd', None)
-    shell = options.get('shell', False)
-    env = options.get('env', None)
-    if env is not None:
-        env = dict(os.environ, **env)
-    stdin = options.get('stdin', None)
-
-    arguments = [_bytes(x) for x in arguments]
-    stdin = _bytes(stdin)
-
-    subproc = subprocess.Popen([cmd] + list(arguments),
-                               close_fds=close_fds,
-                               shell=shell,
-                               cwd=cwd,
-                               env=env,
-                               stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, )
-
-    out, err = subproc.communicate(input=stdin)
-
-    subproc.wait()
-
-    out = _str(out)
-    err = _str(err)
-
-    if out != '':
-        out = out.strip("\n").split("\n")
-        for l in out:
-            dd("stdout:", l)
-    else:
+    options['check'] = True
+    code, out, err = pykit3proc.command(cmd, *arguments, **options)
+    # TODO out is never None
+    if out is None:
         out = []
-
-    if err != '':
-        err = err.strip("\n").split("\n")
-        for l in err:
-            dd("stderr:", l)
     else:
+        out = out.splitlines()
+    if err is None:
         err = []
-
-    if subproc.returncode != 0:
-        raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
-
-    return subproc.returncode, out, err
+    else:
+        err = err.splitlines()
+    return code, out, err
 
 
 def cmd_tty(cmd, *arguments, **options):
-
-    # TODO doc
-
-    # make a pseudo tty to cheat git
-
-    dd("command:", cmd, arguments, options)
-
-    close_fds = options.get('close_fds', True)
-    shell = options.get('shell', False)
-    cwd = options.get('cwd', None)
-    env = options.get('env', None)
-    if env is not None:
-        env = dict(os.environ, **env)
-
-    arguments = [_bytes(x) for x in arguments]
-
-    master_fd, slave_fd = pty.openpty()
-    err_master_fd, err_slave_fd = pty.openpty()
-
-    subproc = subprocess.Popen([cmd] + list(arguments),
-                               close_fds=close_fds,
-                               shell=shell,
-                               cwd=cwd,
-                               env=env,
-                               stdout=slave_fd,
-                               stderr=err_slave_fd,
-                               )
-
-    out = []
-    err = []
-    while subproc.poll() is None:
-        r, _, _ = select.select([err_master_fd, master_fd], [], [], 0.01)
-        if master_fd in r:
-            o = os.read(master_fd, 10240)
-            out.append(o)
-        if err_master_fd in r:
-            o = os.read(err_master_fd, 10240)
-            err.append(o)
-
-    out = b"".join(out)
-    err = b"".join(err)
-
-    out = _str(out)
-    err = _str(err)
-
-    if out != '':
-        out = out.splitlines()
-        for l in out:
-            dd("stdout:", l)
-    else:
-        out = []
-
-    if err != '':
-        err = err.splitlines()
-        for l in err:
-            dd("stderr:", l)
-    else:
-        err = []
-
-    if subproc.returncode != 0:
-        raise ProcError(subproc.returncode, out, err, cmd, arguments, options)
-
-    return subproc.returncode, out, err
+    dd("cmd_tty:", cmd, arguments, options)
+    options['tty'] = True
+    return cmdx(cmd, *arguments, **options)
 
 
 def cmd_interactive(cmd, *arguments, **options):
-
     # interactive mode, delegate stdin to sub proc
-    # and sub proc output directly to super proc stdout
-    dd("interactive command:", cmd, arguments, options)
-    dd(' '.join([cmd] + list(arguments)))
-
-    close_fds = options.get('close_fds', True)
-    cwd = options.get('cwd', None)
-    shell = options.get('shell', False)
-    env = options.get('env', None)
-    if env is not None:
-        env = dict(os.environ, **env)
-
-    arguments = [_bytes(x) for x in arguments]
-
-    subproc = subprocess.Popen([cmd] + list(arguments),
-                               close_fds=close_fds,
-                               shell=shell,
-                               cwd=cwd,
-                               env=env,
-                               )
-
-    subproc.communicate()
-    subproc.wait()
-
-    if subproc.returncode != 0:
-        raise ProcError(subproc.returncode, [], [], cmd, arguments, options)
-
-    return subproc.returncode, [], []
+    dd("cmd_interactive:", cmd, arguments, options)
+    options['capture'] = False
+    return cmdx(cmd, *arguments, **options)
 
 
 def display(out, err):
@@ -992,12 +835,12 @@ def git_args():
             continue
 
         if arg == '--no-replace-objects':
-            # TODO 
+            # TODO
             opt["no_replace_objects"] = True
             continue
 
         if arg == '--bare':
-            # TODO 
+            # TODO
             opt["bare"] = True
             continue
 
@@ -1010,11 +853,11 @@ def git_args():
             continue
 
         if arg.startswith('--namespace='):
-            # TODO 
+            # TODO
             opt["namespace"] = arg.split('=', 1)[1]
             continue
         if arg.startswith('--super-prefix='):
-            # TODO 
+            # TODO
             opt["super_prefix"] = arg.split('=', 1)[1]
             continue
 

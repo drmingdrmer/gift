@@ -7,8 +7,8 @@
 import imp
 import os
 import shutil
-import unittest
 import tempfile
+import unittest
 
 gift = imp.load_source('gift', './gift')
 
@@ -237,9 +237,9 @@ class TestGiftAPI(BaseTest):
 
     def test_get_subrepo_config(self):
         gg = Gift({
-                'startpath':[superp],
-                'git_dir':None,
-                'work_tree':None, 
+            'startpath': [superp],
+            'git_dir': None,
+            'work_tree': None,
         })
         gg.init_git_config()
 
@@ -265,9 +265,9 @@ class TestGiftAPI(BaseTest):
 
         base = {
             'confkv': [],
-                'startpath':[superp],
-                'git_dir':None,
-                'work_tree':None, 
+            'startpath': [superp],
+            'git_dir': None,
+            'work_tree': None,
         }
 
         cases = [
@@ -291,9 +291,9 @@ class TestGiftPartialInit(BaseTest):
         super(TestGiftPartialInit, self).setUp()
 
         gg = Gift({
-        'startpath': [superp],
-                'git_dir':None,
-                'work_tree':None, 
+            'startpath': [superp],
+            'git_dir': None,
+            'work_tree': None,
 
         })
         gg.init_git_config()
@@ -405,10 +405,10 @@ class TestGiftDelegate(BaseTest):
             '',
             'simple_cmd: null',
             'verbose: false',
-                '', 
-                'evaluated cwd: ' + this_base +'/testdata/super',
-                'evaluated git_dir: None',
-                'evaluated working_dir: None', 
+            '',
+            'evaluated cwd: ' + this_base + '/testdata/super',
+            'evaluated git_dir: None',
+            'evaluated working_dir: None',
         ], out)
 
     def test_opt_minus_c(self):
@@ -423,26 +423,26 @@ class TestGiftDelegate(BaseTest):
         with tempfile.TemporaryDirectory() as tmpdir:
             out = cmdout(giftp, '--git-dir=' + supergitp, "log", "-n1", cwd=tmpdir)
 
-        self.assertEqual( [
-                'commit c3954c897dfe40a5b99b7145820eeb227210265c',
-                'Author: drdr xp <drdr.xp@gmail.com>',
-                'Date:   Fri Jan 24 15:01:01 2020 +0800',
-                '',
-                '    add super' ], out)
+        self.assertEqual([
+            'commit c3954c897dfe40a5b99b7145820eeb227210265c',
+            'Author: drdr xp <drdr.xp@gmail.com>',
+            'Date:   Fri Jan 24 15:01:01 2020 +0800',
+            '',
+            '    add super'], out)
 
     def test_opt_worktree(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             out = cmdout(giftp,
                          '--git-dir=' + supergitp,
-                         '--work-tree=' + tmpdir, 
+                         '--work-tree=' + tmpdir,
                          "log", "-n1", cwd=".")
 
-        self.assertEqual( [
-                'commit c3954c897dfe40a5b99b7145820eeb227210265c',
-                'Author: drdr xp <drdr.xp@gmail.com>',
-                'Date:   Fri Jan 24 15:01:01 2020 +0800',
-                '',
-                '    add super' ], out)
+        self.assertEqual([
+            'commit c3954c897dfe40a5b99b7145820eeb227210265c',
+            'Author: drdr xp <drdr.xp@gmail.com>',
+            'Date:   Fri Jan 24 15:01:01 2020 +0800',
+            '',
+            '    add super'], out)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             out = cmdout(giftp,
@@ -454,19 +454,19 @@ class TestGiftDelegate(BaseTest):
                          "HEAD",
                          cwd=".")
 
-        self.assertEqual( ['.gift', 'imsuperman'] , out)
+        self.assertEqual(['.gift', 'imsuperman'], out)
 
     def test_opt_big_c(self):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             out = cmdout(giftp,
-                         '-C', this_base, 
+                         '-C', this_base,
                          '--git-dir=' + pj('testdata', 'supergit'),
                          '--work-tree=' + pj("testdata", 'super'),
                          "ls-files",
                          cwd=tmpdir)
 
-        self.assertEqual( ['.gift', 'imsuperman'] , out)
+        self.assertEqual(['.gift', 'imsuperman'], out)
 
     def test_error_output(self):
         e = None
@@ -578,8 +578,7 @@ class TestGift(BaseTest):
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)
-        a = cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)
-        dd(a)
+        cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)
         self._gitoutput([giftp, "ls-files"], [
             ".gift",
             ".gift-refs",
