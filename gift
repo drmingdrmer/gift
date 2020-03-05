@@ -8,6 +8,7 @@ import sys
 import yaml
 
 import pykit3proc
+from pykit3proc import CalledProcessError
 
 if hasattr(sys, 'getfilesystemencoding'):
     defenc = sys.getfilesystemencoding()
@@ -402,7 +403,7 @@ class Gift(object):
         try:
             # TODO should not cmd0
             cont = g.cmd0("show", "HEAD:" + refsfn)
-        except ProcError:
+        except CalledProcessError:
             return None
 
         try:
@@ -516,7 +517,7 @@ class Gift(object):
             try:
                 # TODO test this
                 cmdx(self.gitpath, "update-ref", superref, hsh, env=sb["env"])
-            except ProcError:
+            except CalledProcessError:
                 # TODO
 
                 dd("can not update ref")
@@ -579,13 +580,13 @@ class Git(object):
     def ref_get(self, name):
         try:
             return self.cmd0("rev-parse", "--verify", "--quiet", name)
-        except ProcError:
+        except CalledProcessError:
             return None
 
     def remote_get(self, name):
         try:
             return self.cmd0("remote", "get-url", name)
-        except ProcError:
+        except CalledProcessError:
             return None
 
     def remote_add(self, name, url):
@@ -691,14 +692,6 @@ class Git(object):
 
     def cmdx(self, *args, **kwargs):
         return cmdx(self.gitpath, *args, **self._opt(**kwargs))
-
-
-# commit = cmd0(origit, "commit-tree", newtree)
-
-# utils
-
-
-ProcError = pykit3proc.CalledProcessError
 
 
 def cmd0(cmd, *arguments, **options):
@@ -887,7 +880,7 @@ if __name__ == "__main__":
             gift.simple_cmd([giftopt['simple_cmd']])
         else:
             gift.cmd(cmds)
-    except ProcError as e:
+    except CalledProcessError as e:
         display(e.out, e.err)
         sys.exit(e.returncode)
     except GiftError as e:

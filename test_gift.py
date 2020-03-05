@@ -12,7 +12,7 @@ import unittest
 
 gift = imp.load_source('gift', './gift')
 
-ProcError = gift.ProcError
+CalledProcessError = gift.CalledProcessError
 cmdx = gift.cmdx
 cmd_interactive = gift.cmd_interactive
 cmd_tty = gift.cmd_tty
@@ -472,7 +472,7 @@ class TestGiftDelegate(BaseTest):
         e = None
         try:
             cmdx(giftp, "abc")
-        except ProcError as ee:
+        except CalledProcessError as ee:
             e = ee
 
         self.assertEqual(1, e.returncode)
@@ -487,7 +487,7 @@ class TestGiftDelegate(BaseTest):
         e = None
         try:
             cmdx(giftp)
-        except ProcError as ee:
+        except CalledProcessError as ee:
             e = ee
 
         self.assertEqual(1, e.returncode)
@@ -546,14 +546,14 @@ class TestGift(BaseTest):
 
         try:
             cmdx(giftp, "commit", "--sub", cwd=supergitp)
-        except ProcError as e:
+        except CalledProcessError as e:
             self.assertEqual(2, e.returncode)
             self.assertEqual([], e.out)
             self.assertEqual(["--sub can not be used in git-dir:" + supergitp], e.err)
 
         try:
             cmdx(giftp, "status", cwd=supergitp)
-        except ProcError as e:
+        except CalledProcessError as e:
             self.assertEqual(128, e.returncode)
             self.assertEqual([], e.out)
             self.assertEqual([
@@ -567,7 +567,7 @@ class TestGift(BaseTest):
     #     # TODO
     #     try:
     #         cmdx(giftp, "commit", "--sub", cwd=workdir)
-    #     except ProcError as e:
+    #     except CalledProcessError as e:
     #         self.assertEqual(2, e.returncode)
     #         self.assertEqual([], e.out)
     #         self.assertEqual([

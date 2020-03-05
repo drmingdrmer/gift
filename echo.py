@@ -2,4 +2,5 @@
 # coding: utf-8
 
 import sys
+
 print(' '.join(sys.argv[1:]))
