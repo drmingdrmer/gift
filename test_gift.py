@@ -113,7 +113,8 @@ class BaseTest(unittest.TestCase):
 class TestGit(BaseTest):
 
     def test_ref_get(self):
-        g = Git(start_dir=superp)
+        # TODO
+        g = Git({}, start_dir=superp)
         t = g.ref_get("abc")
         self.assertIsNone(t)
 
@@ -127,7 +128,8 @@ class TestGit(BaseTest):
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
     def test_remote_get(self):
-        g = Git(start_dir=superp)
+        # TODO
+        g = Git({}, start_dir=superp)
         t = g.remote_get("abc")
         self.assertIsNone(t)
 
@@ -136,7 +138,8 @@ class TestGit(BaseTest):
         self.assertEqual("newremote-url", t)
 
     def test_remote_add(self):
-        g = Git(start_dir=superp)
+        # TODO
+        g = Git({}, start_dir=superp)
         t = g.remote_get("abc")
         self.assertIsNone(t)
 
@@ -146,7 +149,8 @@ class TestGit(BaseTest):
 
     def test_blob_new(self):
         write_file(pj(superp, "newblob"), "newblob!!!")
-        g = Git(start_dir=superp)
+        # TODO
+        g = Git({}, start_dir=superp)
         blobhash = g.blob_new("newblob")
 
         content = cmd0(origit, "cat-file", "-p", blobhash, cwd=superp)
@@ -154,7 +158,8 @@ class TestGit(BaseTest):
 
     def test_add_tree(self):
 
-        g = Git(start_dir=superp)
+        # TODO opt
+        g = Git({}, start_dir=superp)
 
         roottreeish = g.get_tree("HEAD")
 

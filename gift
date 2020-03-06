@@ -48,6 +48,21 @@ def pabs(*args):
     return os.path.normpath(p)
 
 
+def prebase(base, p):
+    '''
+    rebaase path p on to base
+    '''
+    if p is None:
+        return None
+    if os.path.isabs(p):
+        return p
+
+    if base is None:
+        return pabs(p)
+
+    return pabs(base, p)
+
+
 class GiftError(Exception):
     def __init__(self, msg):
         super(GiftError, self).__init__(msg)
@@ -76,13 +91,13 @@ class Gift(object):
 
         st = pabs(".")
         for p in opt['startpath']:
-            st = self._init_path(st, p)
+            st = prebase(st, p)
 
         self.startpath = st
         self.cwd = self.startpath
 
-        self.git_dir = self._init_path(self.startpath, opt['git_dir'])
-        self.working_dir = self._init_path(self.startpath, opt['work_tree'])
+        self.git_dir = prebase(self.startpath, opt['git_dir'])
+        self.working_dir = prebase(self.startpath, opt['work_tree'])
 
     def _get_super_opt(self):
         opt = {
@@ -95,17 +110,6 @@ class Gift(object):
         if self.working_dir is not None:
             opt['env']['GIT_WORK_TREE'] = self.working_dir
         return opt
-
-    def _init_path(self, base, p):
-        if p is None:
-            return None
-        if os.path.isabs(p):
-            return p
-
-        if base is None:
-            return pabs(p)
-
-        return pabs(base, p)
 
     def init_git_config(self):
 
@@ -194,21 +198,30 @@ class Gift(object):
     def _g(self, what="", bare=False):
         # TODO cwd
         if what == '':
-            return Git(gitpath=self.gitpath,
-                       gitdir=self.git_dir,
-                       working_dir=self.working_dir)
+            return Git(
+                opt,
+                gitpath=self.gitpath,
+            )
 
         if isinstance(what, str):
             sb = self.conf["dirs"][what]
         else:
             sb = what
+
+        git_dir = sb["env"]["GIT_DIR"]
+        working_dir = sb["env"]["GIT_WORK_TREE"]
+
         if bare:
-            return Git(gitpath=self.gitpath,
-                       gitdir=sb["env"]["GIT_DIR"])
+            return Git(
+                opt,
+                gitpath=self.gitpath,
+                gitdir=git_dir)
         else:
-            return Git(gitpath=self.gitpath,
-                       gitdir=sb["env"]["GIT_DIR"],
-                       working_dir=sb["env"]["GIT_WORK_TREE"])
+            return Git(
+                opt,
+                gitpath=self.gitpath,
+                gitdir=git_dir,
+                working_dir=working_dir)
 
     def check_worktree(self, sb):
         self.try_init_sub_git(sb)
@@ -535,7 +548,7 @@ class Gift(object):
 
 class Git(object):
 
-    def __init__(self, gitpath=None, gitdir=None, working_dir=None, start_dir=None):
+    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, start_dir=None):
         self.gitpath = gitpath or "git"
         self.gitdir = gitdir
         self.working_dir = working_dir
