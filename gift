@@ -785,28 +785,27 @@ class GitOpt(object):
                  '--info-path',
                  '--man-path',
                  '--exec-path',
-    )
+                 )
 
     def __init__(self):
         self.opt = {
-                "startpath": [],
-                "confkv": [],
-                "paging": None,
-                "no_replace_objects": False,
-                "bare": False,
-                "git_dir": None,
-                "work_tree": None,
-                "namespace": None,
-                "super_prefix": None,
-                "exec_path": None,
+            "startpath": [],
+            "confkv": [],
+            "paging": None,
+            "no_replace_objects": False,
+            "bare": False,
+            "git_dir": None,
+            "work_tree": None,
+            "namespace": None,
+            "super_prefix": None,
+            "exec_path": None,
         }
         self.infos = {}
         self.additional = {}
 
         self.cmds = []
 
-    def parse_arg(self, args, additional=None):
-        cmds = args
+    def parse_args(self, args, additional=None):
         while len(args) > 0:
             arg = args.pop(0)
 
@@ -868,10 +867,51 @@ class GitOpt(object):
 
         return self
 
+    def to_args(self):
+        o = self.opt
+        rst = []
+        for p in o['startpath']:
+            rst.append('-C')
+            rst.append(p)
+
+        for kv in o['confkv']:
+            rst.append('-c')
+            rst.append(kv)
+
+        if o['exec_path'] is not None:
+            rst.append('--exec-path=' + o['exec_path'])
+
+        if o['paging'] is True:
+            rst.append('-p')
+
+        if o['paging'] is False:
+            rst.append('--no-pager')
+
+        if o['no_replace_objects'] is True:
+            rst.append('--no-replace-objects')
+
+        if o['bare'] is True:
+            rst.append('--bare')
+
+        if o['git_dir'] is not None:
+            rst.append('--git-dir=' + o['git_dir'])
+
+        if o['work_tree'] is not None:
+            rst.append('--work-tree=' + o['work_tree'])
+
+        if o['namespace'] is not None:
+            rst.append('--namespace=' + o['namespace'])
+
+        if o['super_prefix'] is not None:
+            rst.append('--super-prefix=' + o['super_prefix'])
+
+        return rst
+
+
 def git_args():
     args = sys.argv[1:]
 
-    gitopt = GitOpt().parse_arg(args, {'--gift-verbose':True})
+    gitopt = GitOpt().parse_args(args, {'--gift-verbose': True})
 
     giftopt = {
         "simple_cmd": None,
