@@ -777,99 +777,124 @@ def _bytes(s):
     return bytes(str(s), defenc)
 
 
+class GitOpt(object):
+
+    info_opts = ('--version',
+                 '--help',
+                 '--html-path',
+                 '--info-path',
+                 '--man-path',
+                 '--exec-path',
+    )
+
+    def __init__(self):
+        self.opt = {
+                "startpath": [],
+                "confkv": [],
+                "paging": None,
+                "no_replace_objects": False,
+                "bare": False,
+                "git_dir": None,
+                "work_tree": None,
+                "namespace": None,
+                "super_prefix": None,
+                "exec_path": None,
+        }
+        self.infos = {}
+        self.additional = {}
+
+        self.cmds = []
+
+    def parse_arg(self, args, additional=None):
+        cmds = args
+        while len(args) > 0:
+            arg = args.pop(0)
+
+            if arg in self.info_opts:
+                self.infos[arg] = arg
+                continue
+
+            if arg == '-C':
+                self.opt["startpath"].append(args.pop(0))
+                continue
+            if arg == '-c':
+                self.opt["confkv"].append(args.pop(0))
+                continue
+            if arg.startswith('--exec-path='):
+                self.opt["exec_path"] = arg.split('=', 1)[1]
+                continue
+            if arg in ('-p', '--paginate'):
+                self.opt["paging"] = True
+                continue
+            if arg == '--no-pager':
+                self.opt["paging"] = False
+                continue
+
+            if arg == '--no-replace-objects':
+                # TODO
+                self.opt["no_replace_objects"] = True
+                continue
+
+            if arg == '--bare':
+                # TODO
+                self.opt["bare"] = True
+                continue
+
+            if arg.startswith('--git-dir='):
+                self.opt["git_dir"] = arg.split('=', 1)[1]
+                continue
+
+            if arg.startswith('--work-tree='):
+                self.opt["work_tree"] = arg.split('=', 1)[1]
+                continue
+
+            if arg.startswith('--namespace='):
+                # TODO
+                self.opt["namespace"] = arg.split('=', 1)[1]
+                continue
+            if arg.startswith('--super-prefix='):
+                # TODO
+                self.opt["super_prefix"] = arg.split('=', 1)[1]
+                continue
+
+            if additional is not None:
+                if arg in additional:
+                    self.additional[arg] = arg
+                    continue
+
+            # no match, push back
+            self.cmds = [arg] + args
+            break
+
+        return self
+
 def git_args():
     args = sys.argv[1:]
-    opt = {
-        "startpath": [],
-        "confkv": [],
-        "paging": None,
-        "no_replace_objects": False,
-        "bare": False,
-        "git_dir": None,
-        "work_tree": None,
-        "namespace": None,
-        "super_prefix": None,
-        "exec_path": None,
-    }
+
+    gitopt = GitOpt().parse_arg(args, {'--gift-verbose':True})
+
     giftopt = {
         "simple_cmd": None,
         "verbose": False,
     }
 
-    cmds = args
-    while len(args) > 0:
-        arg = args.pop(0)
+    if len(gitopt.infos) > 0:
+        giftopt["simple_cmd"] = list(gitopt.infos)[0]
 
-        if arg in ('--version',
-                   '--help',
-                   '--html-path',
-                   '--info-path',
-                   '--man-path',
-                   '--exec-path',
-                   ):
-            giftopt['simple_cmd'] = arg
-            continue
+    if '--gift-verbose' in gitopt.additional:
+        giftopt['verbose'] = True
 
-        if arg == '-C':
-            opt["startpath"].append(args.pop(0))
-            continue
-        if arg == '-c':
-            opt["confkv"].append(args.pop(0))
-            continue
-        if arg.startswith('--exec-path='):
-            opt["exec_path"] = arg.split('=', 1)[1]
-            continue
-        if arg in ('-p', '--paginate'):
-            opt["paging"] = True
-            continue
-        if arg == '--no-pager':
-            opt["paging"] = False
-            continue
-
-        if arg == '--no-replace-objects':
-            # TODO
-            opt["no_replace_objects"] = True
-            continue
-
-        if arg == '--bare':
-            # TODO
-            opt["bare"] = True
-            continue
-
-        if arg.startswith('--git-dir='):
-            opt["git_dir"] = arg.split('=', 1)[1]
-            continue
-
-        if arg.startswith('--work-tree='):
-            opt["work_tree"] = arg.split('=', 1)[1]
-            continue
-
-        if arg.startswith('--namespace='):
-            # TODO
-            opt["namespace"] = arg.split('=', 1)[1]
-            continue
-        if arg.startswith('--super-prefix='):
-            # TODO
-            opt["super_prefix"] = arg.split('=', 1)[1]
-            continue
-
-        if arg == '--gift-verbose':
-            giftopt["verbose"] = True
-            continue
-
-        # push back
-        cmds = [arg] + args
-        break
-
-    return opt, giftopt, cmds
+    return gitopt.opt, giftopt, gitopt.cmds
 
 
 if __name__ == "__main__":
     opt, giftopt, cmds = git_args()
+
     dd("opt:", opt)
     dd("cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
+    # TODO git box received a unexpected GIT_DIR env.
     gift = Gift(opt)
 
     if giftopt["verbose"]:
