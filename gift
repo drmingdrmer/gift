@@ -110,6 +110,15 @@ class Gift(object):
         self.git_dir = prebase(self.startpath, self.gitopt.opt['git_dir'])
         self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])
 
+    def out(self, fd, *msg):
+
+        os.write(fd, b"GIFT: ")
+
+        for m in msg:
+            os.write(fd, _bytes(m))
+            os.write(fd, b" ")
+        os.write(fd, b"\n")
+
     def init_git_config(self):
 
         git_dir_specified = self.git_dir is not None
@@ -144,10 +153,8 @@ class Gift(object):
                 pass
         else:
             if self.working_dir is None:
-                # TODO test non git dir
                 self.working_dir = cmd0(self.gitpath, "rev-parse", "--show-toplevel", cwd=self.cwd)
 
-        # TODO test working_dir
         dd("working_dir:", self.working_dir)
 
         self.confpath = self.working_dir + '/' + conffn
@@ -162,7 +169,7 @@ class Gift(object):
             with open(self.confpath, 'r') as f:
                 cont = f.read()
         except OSError:
-            # TODO info of no config
+            self.out(2, conffn, "is not found")
             return {
                 "dirs": {}
             }
@@ -201,11 +208,11 @@ class Gift(object):
         return yml
 
     def _g(self, what="", bare=False):
-        # TODO cwd
         if what == '':
             return Git(
                 self.gitopt,
                 gitpath=self.gitpath,
+                cwd=self.cwd,
             )
 
         if isinstance(what, str):
@@ -221,6 +228,7 @@ class Gift(object):
                 self.gitopt,
                 gitpath=self.gitpath,
                 gitdir=git_dir,
+                cwd=self.cwd,
                 ctxmsg=sb['dir'],
             )
         else:
@@ -229,6 +237,7 @@ class Gift(object):
                 gitpath=self.gitpath,
                 gitdir=git_dir,
                 working_dir=working_dir,
+                cwd=self.cwd,
                 ctxmsg=sb['dir'],
             )
 

@@ -566,7 +566,6 @@ class TestGift(BaseTest):
     def test_clone_not_in_git(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             cmdx(giftp, "clone", bargitp, "bar", cwd=tmpdir)
-            print (tmpdir)
             self._gitoutput([giftp, "ls-files"], [
                 "bar"
             ], cwd=pj(tmpdir, 'bar'))
