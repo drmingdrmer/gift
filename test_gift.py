@@ -115,7 +115,7 @@ class TestGit(BaseTest):
 
     def test_ref_get(self):
         # TODO
-        g = Git({}, start_dir=superp)
+        g = Git(GitOpt(), cwd=superp)
         t = g.ref_get("abc")
         self.assertIsNone(t)
 
@@ -130,7 +130,7 @@ class TestGit(BaseTest):
 
     def test_remote_get(self):
         # TODO
-        g = Git({}, start_dir=superp)
+        g = Git(GitOpt(), cwd=superp)
         t = g.remote_get("abc")
         self.assertIsNone(t)
 
@@ -140,7 +140,7 @@ class TestGit(BaseTest):
 
     def test_remote_add(self):
         # TODO
-        g = Git({}, start_dir=superp)
+        g = Git(GitOpt(), cwd=superp)
         t = g.remote_get("abc")
         self.assertIsNone(t)
 
@@ -151,7 +151,7 @@ class TestGit(BaseTest):
     def test_blob_new(self):
         write_file(pj(superp, "newblob"), "newblob!!!")
         # TODO
-        g = Git({}, start_dir=superp)
+        g = Git(GitOpt(), cwd=superp)
         blobhash = g.blob_new("newblob")
 
         content = cmd0(origit, "cat-file", "-p", blobhash, cwd=superp)
@@ -160,7 +160,7 @@ class TestGit(BaseTest):
     def test_add_tree(self):
 
         # TODO opt
-        g = Git({}, start_dir=superp)
+        g = Git(GitOpt(), cwd=superp)
 
         roottreeish = g.get_tree("HEAD")
 
@@ -242,11 +242,11 @@ class TestGit(BaseTest):
 class TestGiftAPI(BaseTest):
 
     def test_get_subrepo_config(self):
-        gg = Gift({
+        gg = Gift(GitOpt().update({
             'startpath': [superp],
             'git_dir': None,
             'work_tree': None,
-        })
+        }))
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "f"))
@@ -287,7 +287,7 @@ class TestGiftAPI(BaseTest):
             opt.update(base)
             opt.update({'paging': v})
 
-            gg = Gift(opt)
+            gg = Gift(GitOpt().update(opt))
             self.assertEqual(expect, gg.make_opt())
 
 
@@ -296,12 +296,12 @@ class TestGiftPartialInit(BaseTest):
     def setUp(self):
         super(TestGiftPartialInit, self).setUp()
 
-        gg = Gift({
+        gg = Gift(GitOpt().update({
             'startpath': [superp],
             'git_dir': None,
             'work_tree': None,
 
-        })
+        }))
         gg.init_git_config()
 
         rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
@@ -365,16 +365,16 @@ class TestGiftDelegate(BaseTest):
 
     def test_opt_paging(self):
         out = cmdout(giftp, "gift-debug", cwd=superp)
-        self.assertIn('paging: null', out)
+        self.assertIn('paging: null', '\n'.join(out))
 
         out = cmdout(giftp, '-p', "gift-debug", cwd=superp)
-        self.assertIn('paging: true', out)
+        self.assertIn('paging: true', '\n'.join(out))
 
         out = cmdout(giftp, '--paginate', "gift-debug", cwd=superp)
-        self.assertIn('paging: true', out)
+        self.assertIn('paging: true', '\n'.join(out))
 
         out = cmdout(giftp, '--no-pager', "gift-debug", cwd=superp)
-        self.assertIn('paging: false', out)
+        self.assertIn('paging: false', '\n'.join(out))
 
     def test_opt_manual_paths(self):
         man_path = cmd0(origit, '--man-path')
@@ -397,17 +397,21 @@ class TestGiftDelegate(BaseTest):
 
         out = cmdout(giftp, "--exec-path=/foo/", "-p", "gift-debug", cwd=superp)
         self.assertEqual([
+
             'gift-debug',
-            'bare: false',
-            'confkv: []',
-            'exec_path: /foo/',
-            'git_dir: null',
-            'namespace: null',
-            'no_replace_objects: false',
-            'paging: true',
-            'startpath: []',
-            'super_prefix: null',
-            'work_tree: null',
+            'additional: {}',
+            'infos: {}',
+            'opt:',
+            '  bare: false',
+            '  confkv: []',
+            '  exec_path: /foo/',
+            '  git_dir: null',
+            '  namespace: null',
+            '  no_replace_objects: false',
+            '  paging: true',
+            '  startpath: []',
+            '  super_prefix: null',
+            '  work_tree: null',
             '',
             'simple_cmd: null',
             'verbose: false',

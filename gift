@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+import copy
 import inspect
 import os
 import sys
@@ -79,25 +80,25 @@ class Gift(object):
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
     def __init__(self, opt):
-        self.opt = opt
-        if opt.get('exec_path') is None:
+        self.gitopt = opt
+        if self.gitopt.opt.get('exec_path') is None:
             self.gitpath = 'git'
         else:
-            self.gitpath = pj(opt['exec_path'], 'git')
+            self.gitpath = pj(self.gitopt.opt['exec_path'], 'git')
         self.in_git_dir = False
 
         # When multiple -C options are given, each subsequent non-absolute -C
         # <path> is interpreted relative to the preceding -C <path>.
 
         st = pabs(".")
-        for p in opt['startpath']:
+        for p in self.gitopt.opt['startpath']:
             st = prebase(st, p)
 
         self.startpath = st
         self.cwd = self.startpath
 
-        self.git_dir = prebase(self.startpath, opt['git_dir'])
-        self.working_dir = prebase(self.startpath, opt['work_tree'])
+        self.git_dir = prebase(self.startpath, self.gitopt.opt['git_dir'])
+        self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])
 
     def _get_super_opt(self):
         opt = {
@@ -199,7 +200,7 @@ class Gift(object):
         # TODO cwd
         if what == '':
             return Git(
-                opt,
+                self.gitopt,
                 gitpath=self.gitpath,
             )
 
@@ -213,12 +214,12 @@ class Gift(object):
 
         if bare:
             return Git(
-                opt,
+                self.gitopt,
                 gitpath=self.gitpath,
                 gitdir=git_dir)
         else:
             return Git(
-                opt,
+                self.gitopt,
                 gitpath=self.gitpath,
                 gitdir=git_dir,
                 working_dir=working_dir)
@@ -382,12 +383,12 @@ class Gift(object):
 
     def make_opt(self):
         rst = []
-        for kv in self.opt['confkv']:
+        for kv in self.gitopt.opt['confkv']:
             rst.append('-c')
             rst.append(kv)
 
-        if self.opt['paging'] is not None:
-            if self.opt['paging']:
+        if self.gitopt.opt['paging'] is not None:
+            if self.gitopt.opt['paging']:
                 rst.append('--paginate')
             else:
                 rst.append('--no-pager')
@@ -548,32 +549,27 @@ class Gift(object):
 
 class Git(object):
 
-    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, start_dir=None):
+    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, cwd=None):
+        self.opt = opt.clone()
+        # gitdir and working_dir is specified and do not consider '-C' option
+        if gitdir is not None:
+            self.opt.opt['git_dir'] = pabs(gitdir)
+        if working_dir is not None:
+            self.opt.opt['work_tree'] = pabs(working_dir)
+
+        self.cwd = cwd
+
         self.gitpath = gitpath or "git"
-        self.gitdir = gitdir
-        self.working_dir = working_dir
-        self.start_dir = start_dir
-
-    def _env(self):
-        env = {}
-        if self.gitdir is not None:
-            env["GIT_DIR"] = self.gitdir
-        if self.working_dir is not None:
-            env["GIT_WORK_TREE"] = self.working_dir
-
-        return env
 
     def _opt(self, **kwargs):
-        """
-        Build env and cwd for a git command by specifying git-dir, working-dir etc.
-        """
-        opt = {
-            "env": self._env(),
-        }
-        if self.start_dir is not None:
-            opt["cwd"] = self.start_dir
+        opt = {}
+        if self.cwd is not None:
+            opt["cwd"] = self.cwd
         opt.update(kwargs)
         return opt
+
+    def _args(self):
+        return self.opt.to_args()
 
     def commit_of(self, ref):
         return self.cmd0("rev-parse", ref)
@@ -698,13 +694,13 @@ class Git(object):
         return self.cmd0("cat-file", "-t", obj)
 
     def cmd0(self, *args, **kwargs):
-        return cmd0(self.gitpath, *args, **self._opt(**kwargs))
+        return cmd0(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
     def cmdout(self, *args, **kwargs):
-        return cmdout(self.gitpath, *args, **self._opt(**kwargs))
+        return cmdout(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
     def cmdx(self, *args, **kwargs):
-        return cmdx(self.gitpath, *args, **self._opt(**kwargs))
+        return cmdx(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
 
 def cmd0(cmd, *arguments, **options):
@@ -804,6 +800,18 @@ class GitOpt(object):
         self.additional = {}
 
         self.cmds = []
+
+    def update(self, d):
+        for k, v in d.items():
+            self.opt[k] = v
+        return self
+
+    def clone(self):
+        o = GitOpt()
+        o.opt = copy.deepcopy(self.opt)
+        o.infos = copy.deepcopy(self.infos)
+        o.additional = copy.deepcopy(self.additional)
+        return o
 
     def parse_args(self, args, additional=None):
         while len(args) > 0:
@@ -924,18 +932,18 @@ def git_args():
     if '--gift-verbose' in gitopt.additional:
         giftopt['verbose'] = True
 
-    return gitopt.opt, giftopt, gitopt.cmds
+    return gitopt, giftopt, gitopt.cmds
 
 
 if __name__ == "__main__":
-    opt, giftopt, cmds = git_args()
+    gitopt, giftopt, cmds = git_args()
 
-    dd("opt:", opt)
+    dd("opt:", gitopt)
     dd("cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
     # TODO git box received a unexpected GIT_DIR env.
-    gift = Gift(opt)
+    gift = Gift(gitopt)
 
     if giftopt["verbose"]:
         verbose = True
@@ -946,7 +954,10 @@ if __name__ == "__main__":
 
     if cmds != [] and cmds[0] == 'gift-debug':
         _out(1, ' '.join(cmds))
-        _out(1, yaml.dump(opt, default_flow_style=False))
+        _out(1, yaml.dump({"opt": gitopt.opt,
+                           "infos": gitopt.infos,
+                           "additional": gitopt.additional},
+                          default_flow_style=False))
         _out(1, yaml.dump(giftopt, default_flow_style=False))
         _out(1, "evaluated cwd: " + str(gift.cwd))
         _out(1, "evaluated git_dir: " + str(gift.git_dir))
