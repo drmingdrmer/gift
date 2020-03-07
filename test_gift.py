@@ -563,6 +563,16 @@ class TestGift(BaseTest):
     #                 "    git clone --sub <url> <path>",
     #         ], e.err)
 
+    def test_clone_not_in_git(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdx(giftp, "clone", bargitp, "bar", cwd=tmpdir)
+            print (tmpdir)
+            self._gitoutput([giftp, "ls-files"], [
+                "bar"
+            ], cwd=pj(tmpdir, 'bar'))
+
+            self._fcontent("bar\n", tmpdir, "bar/bar")
+
     def test_clone_in_other_repo(self):
         cmdx(giftp, "init", cwd=emptyp)
         cmdx(giftp, "clone", "../bargit", "bar", cwd=emptyp)

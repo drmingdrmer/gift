@@ -110,28 +110,22 @@ class Gift(object):
         self.git_dir = prebase(self.startpath, self.gitopt.opt['git_dir'])
         self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])
 
-    def _get_super_opt(self):
-        opt = {
-            'cwd': self.cwd,
-            'env': {
-            }
-        }
-        if self.git_dir is not None:
-            opt['env']['GIT_DIR'] = self.git_dir
-        if self.working_dir is not None:
-            opt['env']['GIT_WORK_TREE'] = self.working_dir
-        return opt
-
     def init_git_config(self):
 
         git_dir_specified = self.git_dir is not None
 
         if self.git_dir is None:
-            self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
-            dd("git_dir:", self.git_dir)
-            self.git_dir = pabs(self.git_dir)
+            try:
+                self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+                dd("git_dir:", self.git_dir)
+                self.git_dir = pabs(self.git_dir)
+            except CalledProcessError:
+                dd("not in a git dir")
 
         dd("git_dir:", self.git_dir)
+
+        if self.git_dir is None:
+            return
 
         if (self.cwd.startswith(self.git_dir + '/')
                 or self.git_dir == self.cwd):
@@ -347,6 +341,10 @@ class Gift(object):
             return
 
         self.init_git_config()
+
+        if self.git_dir is None:
+            self._g().cmdpass(*cmds)
+            return
 
         cmd, issub, cmds = self._arg_param(cmds)
 
@@ -951,7 +949,7 @@ def git_args():
 if __name__ == "__main__":
     gitopt, giftopt, cmds = git_args()
 
-    dd("gift opt:", gitopt)
+    dd("gift opt:", gitopt.opt)
     dd("gift cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
