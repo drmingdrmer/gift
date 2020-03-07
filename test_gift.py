@@ -41,7 +41,6 @@ subbarp = pj(this_base, "testdata", "super", "foo", "bar")
 subwowp = pj(this_base, "testdata", "super", "foo", "wow")
 bargitp = pj(this_base, "testdata", "bargit")
 barp = pj(this_base, "testdata", "bar")
-echop = pj(this_base, "echo.py")
 
 execpath = cmd0(origit, '--exec-path')
 
