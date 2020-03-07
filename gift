@@ -23,6 +23,7 @@ superref = "refs/remotes/super/head"
 
 verbose = False
 # verbose = True
+# verbose = 2
 
 
 def dd(*msg):
@@ -33,6 +34,15 @@ def dd(*msg):
         os.write(2, _bytes(m))
         os.write(2, b" ")
     os.write(2, b"\n")
+
+
+def ddstack(*msg):
+
+    if isinstance(verbose, int) and verbose >= 2:
+
+        stack = inspect.stack()[1:]
+        for i, (frame, path, ln, func, line, xx) in enumerate(stack):
+            dd("stack:", ln, func, line[0])
 
 
 def _out(f, line):
@@ -216,13 +226,17 @@ class Gift(object):
             return Git(
                 self.gitopt,
                 gitpath=self.gitpath,
-                gitdir=git_dir)
+                gitdir=git_dir,
+                ctxmsg=sb['dir'],
+            )
         else:
             return Git(
                 self.gitopt,
                 gitpath=self.gitpath,
                 gitdir=git_dir,
-                working_dir=working_dir)
+                working_dir=working_dir,
+                ctxmsg=sb['dir'],
+            )
 
     def check_worktree(self, sb):
         self.try_init_sub_git(sb)
@@ -244,13 +258,15 @@ class Gift(object):
         u = g.remote_get(up["name"])
         if u is None:
             dd("remote not found, add:", up)
-            g.remote_add(up["name"], up["url"])
+            g.out(2, "add remote:", up["name"], up["url"])
+            g.remote_add(up["name"], up["url"], capture=False)
 
         r = g.ref_get(up["name"] + '/' + up["branch"])
         if r is None:
             dd("remote head not found:", up["name"] + '/' + up["branch"])
             dd("need fetch")
-            g.fetch(up["name"])
+            g.out(2, "fetch", up["name"], up["url"])
+            g.fetch(up["name"], capture=False)
 
     def try_init_sub_worktree(self, sb):
 
@@ -293,9 +309,9 @@ class Gift(object):
         cmd = cmds[0]
         if cmd == '--version':
             _out(1, "gift version " + version)
-            self.delegate(['--version'], env=None)
+            self._g().cmdpass('--version')
         elif cmd == '--help':
-            self.delegate(['--help'], env=None)
+            self._g().cmdpass('--help')
             lines = [
                 "",
                 "Gift extended command:",
@@ -315,7 +331,7 @@ class Gift(object):
                      '--info-path',
                      '--html-path',
                      ):
-            self.delegate([cmd])
+            self._g().cmdpass(cmd)
 
     def cmd(self, cmds):
 
@@ -340,7 +356,7 @@ class Gift(object):
             if issub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                self.delegate(cmds, **self._get_super_opt())
+                g = self._g().cmdpass(*cmds)
         else:
 
             subdir = self.cwd
@@ -367,33 +383,16 @@ class Gift(object):
                     return self.x_reset_sub(cmds)
 
             if sb is not None:
-                self.delegate(cmds, env=sb['env'], cwd=self.cwd)
+                g = self._g(sb)
+                g.cmdpass(*cmds)
             else:
+                g = self._g()
+                g.cmdpass(*cmds)
                 # TODO run gift in a git-dir
-                self.delegate(cmds, **self._get_super_opt())
 
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
             self._populate_ref(refs1)
-
-    def delegate(self, cmds, cwd=None, env=None):
-        # delegate to original git
-        opts = self.make_opt()
-        cmd_interactive(self.gitpath, *opts, *cmds, cwd=cwd, env=env)
-
-    def make_opt(self):
-        rst = []
-        for kv in self.gitopt.opt['confkv']:
-            rst.append('-c')
-            rst.append(kv)
-
-        if self.gitopt.opt['paging'] is not None:
-            if self.gitopt.opt['paging']:
-                rst.append('--paginate')
-            else:
-                rst.append('--no-pager')
-
-        return rst
 
     def _arg_param(self, cmds):
 
@@ -549,7 +548,7 @@ class Gift(object):
 
 class Git(object):
 
-    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, cwd=None):
+    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, cwd=None, ctxmsg=None):
         self.opt = opt.clone()
         # gitdir and working_dir is specified and do not consider '-C' option
         if gitdir is not None:
@@ -560,6 +559,19 @@ class Git(object):
         self.cwd = cwd
 
         self.gitpath = gitpath or "git"
+        self.ctxmsg = ctxmsg
+
+    def out(self, fd, *msg):
+
+        os.write(fd, b"GIFT: ")
+
+        if self.ctxmsg is not None:
+            os.write(fd, _bytes(self.ctxmsg) + b": ")
+
+        for m in msg:
+            os.write(fd, _bytes(m))
+            os.write(fd, b" ")
+        os.write(fd, b"\n")
 
     def _opt(self, **kwargs):
         opt = {}
@@ -580,8 +592,8 @@ class Git(object):
     def checkout(self, branch):
         self.cmdx("checkout", branch)
 
-    def fetch(self, name):
-        self.cmdx("fetch", name)
+    def fetch(self, name, **options):
+        self.cmdx("fetch", name, **options)
 
     def get_tree(self, commit):
         return self.cmd0("rev-parse", commit + "^{tree}")
@@ -598,8 +610,8 @@ class Git(object):
         except CalledProcessError:
             return None
 
-    def remote_add(self, name, url):
-        self.cmdx("remote", "add", name, url)
+    def remote_add(self, name, url, **options):
+        self.cmdx("remote", "add", name, url, **options)
 
     def tree_items(self, treeish, name_only=False):
         args = []
@@ -702,6 +714,9 @@ class Git(object):
     def cmdx(self, *args, **kwargs):
         return cmdx(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
+    def cmdpass(self, *args, **kwargs):
+        return cmdpass(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
+
 
 def cmd0(cmd, *arguments, **options):
     dd("cmd0:", cmd, arguments, options)
@@ -722,9 +737,7 @@ def cmdout(cmd, *arguments, **options):
 def cmdx(cmd, *arguments, **options):
     dd("cmdx:", cmd, arguments, options)
 
-    stack = inspect.stack()[1:]
-    for i, (frame, path, ln, func, line, xx) in enumerate(stack):
-        dd("stack:", ln, func, line, xx)
+    ddstack()
 
     options['check'] = True
     code, out, err = pykit3proc.command(cmd, *arguments, **options)
@@ -739,9 +752,9 @@ def cmd_tty(cmd, *arguments, **options):
     return cmdx(cmd, *arguments, **options)
 
 
-def cmd_interactive(cmd, *arguments, **options):
+def cmdpass(cmd, *arguments, **options):
     # interactive mode, delegate stdin to sub proc
-    dd("cmd_interactive:", cmd, arguments, options)
+    dd("cmdpass:", cmd, arguments, options)
     options['capture'] = False
     return cmdx(cmd, *arguments, **options)
 
@@ -938,8 +951,8 @@ def git_args():
 if __name__ == "__main__":
     gitopt, giftopt, cmds = git_args()
 
-    dd("opt:", gitopt)
-    dd("cmds:", cmds)
+    dd("gift opt:", gitopt)
+    dd("gift cmds:", cmds)
     # TODO need to pass opt to delegated command
     # TODO test change remote/up['branch'] then init again.
     # TODO git box received a unexpected GIT_DIR env.

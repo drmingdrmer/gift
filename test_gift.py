@@ -15,7 +15,6 @@ gift = imp.load_source('gift', './gift')
 CalledProcessError = gift.CalledProcessError
 GitOpt = gift.GitOpt
 cmdx = gift.cmdx
-cmd_interactive = gift.cmd_interactive
 cmd_tty = gift.cmd_tty
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
@@ -54,6 +53,7 @@ def _clean_case():
             cmdx(origit, "reset", "--hard", cwd=p)
             cmdx(origit, "clean", "-dxf", cwd=p)
 
+    force_remove(pj(this_base, "testdata", "empty", "bar"))
     force_remove(pj(this_base, "testdata", "empty", ".git"))
     force_remove(pj(this_base, "testdata", "super", ".git"))
     force_remove(barp)
@@ -266,29 +266,6 @@ class TestGiftAPI(BaseTest):
             'sub_gitdir': 'gift/subdir/foo/bar',
             'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
         }, sb)
-
-    def test_make_opt(self):
-
-        base = {
-            'confkv': [],
-            'startpath': [superp],
-            'git_dir': None,
-            'work_tree': None,
-        }
-
-        cases = [
-            (None, []),
-            (True, ['--paginate']),
-            (False, ['--no-pager']),
-        ]
-        for v, expect in cases:
-
-            opt = {}
-            opt.update(base)
-            opt.update({'paging': v})
-
-            gg = Gift(GitOpt().update(opt))
-            self.assertEqual(expect, gg.make_opt())
 
 
 class TestGiftPartialInit(BaseTest):
@@ -586,9 +563,25 @@ class TestGift(BaseTest):
     #                 "    git clone --sub <url> <path>",
     #         ], e.err)
 
+    def test_clone_in_other_repo(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(giftp, "clone", "../bargit", "bar", cwd=emptyp)
+        self._gitoutput([giftp, "ls-files"], [
+            "bar"
+        ], cwd=pj(emptyp, "bar"))
+
+        self._fcontent("bar\n", emptyp, "bar/bar")
+
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)
-        cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)
+        code, out, err = cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)
+        for l in (
+                'GIFT: path/to/bar: add remote: origin ../bargit',
+                'GIFT: path/to/bar: fetch origin ../bargit',
+                "From ../bargit",
+        ):
+            self.assertIn(l, "\n".join(err), "it should output fetching status")
+
         self._gitoutput([giftp, "ls-files"], [
             ".gift",
             ".gift-refs",
