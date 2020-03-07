@@ -169,7 +169,6 @@ class Gift(object):
             with open(self.confpath, 'r') as f:
                 cont = f.read()
         except OSError:
-            self.out(2, conffn, "is not found")
             return {
                 "dirs": {}
             }
