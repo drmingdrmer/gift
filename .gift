@@ -1,7 +1,5 @@
 dirs:
-    pyauto: https://github.com/drmingdrmer/pyauto@master
-    wiki: ssh://git@github.com/drmingdrmer/gift.wiki.git@master
-    pykit3proc: git@github.com:drmingdrmer/pykit3proc.git@master
-
-
-# vim: ft=yaml
+  pk3proc: git@github.com:pykit3/pk3proc.git@master
+  pyauto: https://github.com/drmingdrmer/pyauto@master
+  pykit3proc: git@github.com:drmingdrmer/pykit3proc.git@master
+  wiki: ssh://git@github.com/drmingdrmer/gift.wiki.git@master
