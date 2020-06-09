@@ -1,4 +1,5 @@
 dirs:
-  pk3proc: git@github.com:pykit3/pk3proc.git@master
+  k3git: git@github.com:drmingdrmer/k3git.git@master
+  k3proc: git@github.com:pykit3/k3proc.git@master
   pyauto: https://github.com/drmingdrmer/pyauto@master
   wiki: ssh://git@github.com/drmingdrmer/gift.wiki.git@master

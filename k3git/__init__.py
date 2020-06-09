@@ -1,5 +1,5 @@
 """
-pk3proc is utility to create sub process.
+package-name is utility to create sub process.
 
 Execute a shell script::
 
@@ -22,22 +22,8 @@ Run a command::
 
 """
 
-from .proc import CalledProcessError
-from .proc import ProcError
-from .proc import TimeoutExpired
-from .proc import command
-from .proc import command_ex
-from .proc import shell_script
-from .proc import start_process
+# from .proc import CalledProcessError
+# from .proc import ProcError
 
 __version__ = "0.2.2"
-
-__all__ = [
-    'CalledProcessError',
-    'TimeoutExpired',
-    'ProcError',
-    'command',
-    'command_ex',
-    'shell_script',
-    'start_process',
-]
+_name = "pk3proc"

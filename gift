@@ -8,8 +8,8 @@ import sys
 
 import yaml
 
-import pk3proc
-from pk3proc import CalledProcessError
+import k3proc
+from k3proc import CalledProcessError
 
 if hasattr(sys, 'getfilesystemencoding'):
     defenc = sys.getfilesystemencoding()
@@ -746,7 +746,7 @@ def cmdx(cmd, *arguments, **options):
     ddstack()
 
     options['check'] = True
-    code, out, err = pk3proc.command(cmd, *arguments, **options)
+    code, out, err = k3proc.command(cmd, *arguments, **options)
     out = out.splitlines()
     err = err.splitlines()
     return code, out, err
