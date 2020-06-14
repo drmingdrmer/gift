@@ -10,6 +10,8 @@ import yaml
 
 import k3proc
 from k3proc import CalledProcessError
+from k3fs import fread
+from k3fs import fwrite
 
 if hasattr(sys, 'getfilesystemencoding'):
     defenc = sys.getfilesystemencoding()
@@ -445,7 +447,7 @@ class Gift(object):
         y = self.read_conf()
         y["dirs"][subdir] = remote
         cont = yaml.dump(y, default_flow_style=False)
-        write_file(self.confpath, cont)
+        fwrite(self.confpath, cont)
         self.init_git_config()
 
         g = self._g()
@@ -461,7 +463,7 @@ class Gift(object):
             self.check_worktree(sb)
 
         try:
-            cont = read_file(pj(self.working_dir, refsfn))
+            cont = fread(pj(self.working_dir, refsfn))
         except IOError:
             # TODO message
             pass
@@ -483,7 +485,7 @@ class Gift(object):
         refs = sorted(refs)
         cont = yaml.dump(refs, default_flow_style=False)
         statep = pj(self.working_dir, refsfn)
-        write_file(statep, cont)
+        fwrite(statep, cont)
 
         statehash = g.blob_new(statep)
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
@@ -770,18 +772,6 @@ def display(out, err):
         _out(1, l)
     for l in err:
         _out(2, l)
-
-
-def read_file(path):
-    with open(path, 'r') as f:
-        return f.read()
-
-
-def write_file(path, cont):
-    with open(path, 'w') as f:
-        f.write(cont)
-        f.flush()
-        os.fsync(f.fileno())
 
 
 def _bytes(s):

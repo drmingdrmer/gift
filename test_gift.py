@@ -10,6 +10,9 @@ import shutil
 import tempfile
 import unittest
 
+from k3fs import fread
+from k3fs import fwrite
+
 gift = imp.load_source('gift', './gift')
 
 CalledProcessError = gift.CalledProcessError
@@ -18,8 +21,6 @@ cmdx = gift.cmdx
 cmd_tty = gift.cmd_tty
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
-read_file = gift.read_file
-write_file = gift.write_file
 pj = gift.pj
 dd = gift.dd
 _bytes = gift._bytes
@@ -70,7 +71,7 @@ class BaseTest(unittest.TestCase):
 
         # .git can not be track in a git repo.
         # need to manually create it.
-        write_file(pj(this_base, "testdata", "super", ".git"),
+        fwrite(pj(this_base, "testdata", "super", ".git"),
                    "gitdir: ../supergit")
 
     def tearDown(self):
@@ -90,7 +91,7 @@ class BaseTest(unittest.TestCase):
         self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", out[0])
 
     def _add_file_to_subbar(self):
-        write_file(pj(subbarp, "newbar"), "newbar")
+        fwrite(pj(subbarp, "newbar"), "newbar")
         cmdx(giftp, "add", "newbar", cwd=subbarp)
         cmdx(giftp, "commit", "-m", "add newbar", cwd=subbarp)
 
@@ -106,7 +107,7 @@ class BaseTest(unittest.TestCase):
     def _fcontent(self, txt, *ps):
         self.assertTrue(os.path.isfile(pj(*ps)), pj(*ps) + " should exist")
 
-        actual = read_file(pj(*ps))
+        actual = fread(pj(*ps))
         self.assertEqual(txt, actual, "check file content")
 
 
@@ -148,7 +149,7 @@ class TestGit(BaseTest):
         self.assertEqual("newremote-url", t)
 
     def test_blob_new(self):
-        write_file(pj(superp, "newblob"), "newblob!!!")
+        fwrite(pj(superp, "newblob"), "newblob!!!")
         # TODO
         g = Git(GitOpt(), cwd=superp)
         blobhash = g.blob_new("newblob")
@@ -710,7 +711,7 @@ class TestGift(BaseTest):
     def _add_commit_to_bar_from_other_clone(self):
         cmdx(origit, "clone", bargitp, barp)
 
-        write_file(pj(barp, "for_fetch"), "for_fetch")
+        fwrite(pj(barp, "for_fetch"), "for_fetch")
         cmdx(origit, "add", "for_fetch", cwd=barp)
         cmdx(origit, "commit", "-m", "add for_fetch", cwd=barp)
         cmdx(origit, "push", "origin", "master", cwd=barp)
@@ -761,7 +762,7 @@ class TestGift(BaseTest):
 
         head_of_bar = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
-        state0 = read_file(pj(superp, ".gift-refs"))
+        state0 = fread(pj(superp, ".gift-refs"))
 
         self._add_file_to_subbar()
         cmdx(giftp, "commit", "--sub", cwd=superp)
@@ -769,7 +770,7 @@ class TestGift(BaseTest):
         head1 = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
         self.assertNotEqual(head_of_bar, head1)
 
-        state1 = read_file(pj(superp, ".gift-refs"))
+        state1 = fread(pj(superp, ".gift-refs"))
         self.assertNotEqual(state0, state1)
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo

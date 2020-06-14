@@ -40,7 +40,11 @@ git clone --sub https://github.com/drmingdrmer/gift.git@master path/to/subrepo
 ## Enhanced commands
 
 ```
+Clone url into sub repo.
 git clone --sub
+
+Commit only the content of the HEAD of a sub repo.
+Ignores cached(staged) content or changes in work tree.
 git commit --sub
 
 git init --sub

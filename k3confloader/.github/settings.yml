@@ -1,0 +1,6 @@
+_extends: gh-config
+
+repository:
+  description: k3confloader loads conf for other pykit3 modules
+  homepage: https://blog.openacid.com
+  topics: conf, loader, lazyload

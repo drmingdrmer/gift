@@ -1,4 +1,6 @@
 dirs:
+  k3fs: git@github.com:pykit3/k3fs.git@master
+  k3confloader: git@github.com:pykit3/k3confloader.git@master
   k3git: git@github.com:drmingdrmer/k3git.git@master
   k3proc: git@github.com:pykit3/k3proc.git@master
   pyauto: https://github.com/drmingdrmer/pyauto@master
