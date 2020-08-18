@@ -16,7 +16,7 @@ class TestConfLoader(unittest.TestCase):
         defaults = dict(
             uid=None,
             gid=None,
-            log_dir=None,
+            log_dir='/tmp',
             cat_stat_dir=None,
             zk_acl=None,              # (('xp', '123', 'cdrwa'), ('foo', 'bar', 'rw'))
             zk_auth=None,              # ('digest', 'xp', '123')
@@ -41,7 +41,7 @@ class TestConfLoader(unittest.TestCase):
         defaults = dict(
             uid=1,
             gid=2,
-            log_dir='/tmp',
+            log_dir='/tmp2',
             cat_stat_dir='/var/log',
             zk_acl=('a', 'b'),
             zk_auth=('digest', 'xp', '123'),

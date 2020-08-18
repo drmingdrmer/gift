@@ -1,7 +1,10 @@
 dirs:
+  k3confloader: git@github.com:drmingdrmer/k3confloader.git@master
   k3fs: git@github.com:pykit3/k3fs.git@master
-  k3confloader: git@github.com:pykit3/k3confloader.git@master
   k3git: git@github.com:drmingdrmer/k3git.git@master
+  k3handy: git@github.com:pykit3/k3handy.git@master
+  k3log: git@github.com:pykit3/k3log.git@master
   k3proc: git@github.com:pykit3/k3proc.git@master
+  k3str: git@github.com:pykit3/k3str.git@master
   pyauto: https://github.com/drmingdrmer/pyauto@master
   wiki: ssh://git@github.com/drmingdrmer/gift.wiki.git@master

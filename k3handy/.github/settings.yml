@@ -1,0 +1,6 @@
+_extends: gh-config
+
+repository:
+  description: handy alias of mostly used functions
+  homepage: https://blog.openacid.com
+  topics: handy, shortcut

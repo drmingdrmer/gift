@@ -5,50 +5,34 @@ import copy
 import inspect
 import os
 import sys
+import logging
 
 import yaml
 
+import k3log
 import k3proc
 from k3proc import CalledProcessError
 from k3fs import fread
 from k3fs import fwrite
-
-if hasattr(sys, 'getfilesystemencoding'):
-    defenc = sys.getfilesystemencoding()
-if defenc is None:
-    defenc = sys.getdefaultencoding()
+from k3str import to_utf8
+from k3handy import cmd0
+from k3handy import cmdout
+from k3handy import cmdpass
+from k3handy import cmdtty
+from k3handy import cmdx
+from k3handy import dd
+from k3handy import ddstack
 
 version = '0.1.0'
 conffn = ".gift"
 refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
 
-verbose = False
-# verbose = True
-# verbose = 2
-
-
-def dd(*msg):
-    if not verbose:
-        return
-    os.write(2, b">>> ")
-    for m in msg:
-        os.write(2, _bytes(m))
-        os.write(2, b" ")
-    os.write(2, b"\n")
-
-
-def ddstack(*msg):
-
-    if isinstance(verbose, int) and verbose >= 2:
-
-        stack = inspect.stack()[1:]
-        for i, (frame, path, ln, func, line, xx) in enumerate(stack):
-            dd("stack:", ln, func, line[0])
-
+logger = logging.getLogger(__name__)
+giftopt = {'verbose' : 0}
 
 def _out(f, line):
-    os.write(f, _bytes(line))
+    os.write(f, to_utf8(line))
     os.write(f, b"\n")
 
 
@@ -117,7 +101,7 @@ class Gift(object):
         os.write(fd, b"GIFT: ")
 
         for m in msg:
-            os.write(fd, _bytes(m))
+            os.write(fd, to_utf8(m))
             os.write(fd, b" ")
         os.write(fd, b"\n")
 
@@ -574,10 +558,10 @@ class Git(object):
         os.write(fd, b"GIFT: ")
 
         if self.ctxmsg is not None:
-            os.write(fd, _bytes(self.ctxmsg) + b": ")
+            os.write(fd, to_utf8(self.ctxmsg) + b": ")
 
         for m in msg:
-            os.write(fd, _bytes(m))
+            os.write(fd, to_utf8(m))
             os.write(fd, b" ")
         os.write(fd, b"\n")
 
@@ -726,60 +710,11 @@ class Git(object):
         return cmdpass(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
 
-def cmd0(cmd, *arguments, **options):
-    dd("cmd0:", cmd, arguments, options)
-
-    _, out, _ = cmdx(cmd, *arguments, **options)
-    dd("cmd0: out:", out)
-    return out[0]
-
-
-def cmdout(cmd, *arguments, **options):
-    dd("cmdout:", cmd, arguments, options)
-
-    _, out, _ = cmdx(cmd, *arguments, **options)
-    dd("cmdout: out:", out)
-    return out
-
-
-def cmdx(cmd, *arguments, **options):
-    dd("cmdx:", cmd, arguments, options)
-
-    ddstack()
-
-    options['check'] = True
-    code, out, err = k3proc.command(cmd, *arguments, **options)
-    out = out.splitlines()
-    err = err.splitlines()
-    return code, out, err
-
-
-def cmd_tty(cmd, *arguments, **options):
-    dd("cmd_tty:", cmd, arguments, options)
-    options['tty'] = True
-    return cmdx(cmd, *arguments, **options)
-
-
-def cmdpass(cmd, *arguments, **options):
-    # interactive mode, delegate stdin to sub proc
-    dd("cmdpass:", cmd, arguments, options)
-    options['capture'] = False
-    return cmdx(cmd, *arguments, **options)
-
-
 def display(out, err):
     for l in out:
         _out(1, l)
     for l in err:
         _out(2, l)
-
-
-def _bytes(s):
-    if isinstance(s, bytes):
-        return s
-    if isinstance(s, str):
-        return bytes(s, defenc)
-    return bytes(str(s), defenc)
 
 
 class GitOpt(object):
@@ -932,20 +867,24 @@ def git_args():
 
     giftopt = {
         "simple_cmd": None,
-        "verbose": False,
     }
+
+    verbose = 0
+    v = os.environ.get('GIFT_VERBOSE')
+    if v is not None:
+        verbose = int(v)
 
     if len(gitopt.infos) > 0:
         giftopt["simple_cmd"] = list(gitopt.infos)[0]
 
     if '--gift-verbose' in gitopt.additional:
-        giftopt['verbose'] = True
+        verbose = 1
 
-    return gitopt, giftopt, gitopt.cmds
+    return gitopt, giftopt, verbose, gitopt.cmds
 
 
 if __name__ == "__main__":
-    gitopt, giftopt, cmds = git_args()
+    gitopt, giftopt, verbose, cmds = git_args()
 
     dd("gift opt:", gitopt.opt)
     dd("gift cmds:", cmds)
@@ -955,8 +894,13 @@ if __name__ == "__main__":
     # TODO test command such "git box": git-box: git rev-parse --git-dir
     gift = Gift(gitopt)
 
-    if giftopt["verbose"]:
-        verbose = True
+    lvl = logging.INFO
+    if verbose > 0:
+        lvl = logging.DEBUG
+
+    k3log.make_logger(
+            fmt= '[%(asctime)s,%(filename)s,%(lineno)d,%(levelname)s] %(message)s',
+            level=lvl)
 
     if cmds == [] and giftopt['simple_cmd'] is None:
         gift.simple_cmd(['--help'])

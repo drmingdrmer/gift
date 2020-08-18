@@ -18,12 +18,11 @@ gift = imp.load_source('gift', './gift')
 CalledProcessError = gift.CalledProcessError
 GitOpt = gift.GitOpt
 cmdx = gift.cmdx
-cmd_tty = gift.cmd_tty
+cmdtty = gift.cmdtty
 cmdout = gift.cmdout
 cmd0 = gift.cmd0
 pj = gift.pj
 dd = gift.dd
-_bytes = gift._bytes
 
 Git = gift.Git
 Gift = gift.Gift
@@ -391,7 +390,6 @@ class TestGiftDelegate(BaseTest):
             '  work_tree: null',
             '',
             'simple_cmd: null',
-            'verbose: false',
             '',
             'evaluated cwd: ' + this_base + '/testdata/super',
             'evaluated git_dir: None',
@@ -399,7 +397,7 @@ class TestGiftDelegate(BaseTest):
         ], out)
 
     def test_opt_minus_c(self):
-        code, out, err = cmd_tty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
+        code, out, err = cmdtty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
         self.assertEqual(0, code)
         self.assertEqual([
             'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
@@ -488,7 +486,7 @@ class TestGiftDelegate(BaseTest):
 
     def test_cmd_tty(self):
         # TODO this test does not belongs to gift
-        code, out, err = cmd_tty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+        code, out, err = cmdtty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
 
         self.assertEqual(0, code)
         # on ci: the output lack of: '\x1b[?1h\x1b=\r'
@@ -508,7 +506,7 @@ class TestGiftDelegate(BaseTest):
         ], err)
 
     def test_interactive_mode(self):
-        _, out, err = cmd_tty(giftp, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+        _, out, err = cmdtty(giftp, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
 
         # self.assertEqual([
         #         '\x1b[?1h\x1b=\r\x1b[33mcommit c3954c897dfe40a5b99b7145820eeb227210265c\x1b[m\x1b[33m (\x1b[m\x1b[1;36mHEAD -> \x1b[m\x1b[1;32mmaster\x1b[m\x1b[33m)\x1b[m\x1b[m\r',

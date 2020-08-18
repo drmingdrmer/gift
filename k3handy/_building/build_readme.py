@@ -47,18 +47,11 @@ def get_examples(pkg):
         rst.append('>>> ' + e.source.strip())
         rst.append(e.want.strip())
 
-    rst = '\n'.join(rst)
+    if rst == []:
+        with open("synopsis.txt", 'r') as f:
+            return f.read()
 
-    for fn in ("synopsis.txt",
-               "synopsis.py",
-               ):
-        try:
-            with open(fn, 'r') as f:
-                rst += '\n' + f.read()
-
-        except FileNotFoundError:
-            pass
-
+    rst =  '\n'.join(rst)
     return rst
 
 

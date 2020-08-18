@@ -1,11 +1,17 @@
 - - k3confloader
-  - 1d302a05b98af400bf7371f6a2257de7d8fc378e
+  - 5a16a251bf4298c9a95af36ecee84cd2c2847735
 - - k3fs
   - 30ee41e29052384c303a14d26e6479688ba86835
 - - k3git
   - fb8e420aee217cc918789fde2bce645ed9ba6939
+- - k3handy
+  - 8a10b0e1b6be4bb41821fbe7308182a26586b60b
+- - k3log
+  - 50991c98f7edf62542a2e5ef87ac385da9cd2b93
 - - k3proc
   - cfe0ba3e0236eeee92e1642f55eea7e80c79aeef
+- - k3str
+  - c1476bab341eb5444179d78a7f87b2475db203a8
 - - pyauto
   - c328e53a454939bf5420081bca31c100cb048ad0
 - - wiki

@@ -25,7 +25,7 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
-_name = 'k3confloader'
+__name__ = 'k3confloader'
 __version__ = '0.1.0'
 
 
@@ -54,7 +54,7 @@ class ConfGetter(object):
 
         uid(int):              the user  id to assign when creating file/dir. Default: None.
         gid(int):              the group id to assign when creating file/dir. Default: None.
-        log_dir(str):          the log dir. Default: None.
+        log_dir(str):          the log dir. Default: '/tmp'.
         cat_stat_dir(str):     the dir to store offset of an unfinished `cat` operation. Default: None.
         zk_acl(tuples):        default zookeeper acl when creating a node in form of: (('xp', '123', 'cdrwa'), ('foo', 'bar', 'rw')). Default: None.
         zk_auth(tuple):        zookeeper auth info when connecting zk in form of: ('digest', 'xp', '123'). Default: None.
@@ -77,7 +77,7 @@ class ConfGetter(object):
     defaults = dict(
         uid=None,
         gid=None,
-        log_dir=None,
+        log_dir='/tmp',
         cat_stat_dir=None,
         zk_acl=None,              # (('xp', '123', 'cdrwa'), ('foo', 'bar', 'rw'))
         zk_auth=None,              # ('digest', 'xp', '123')

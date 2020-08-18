@@ -1,6 +1,6 @@
 uid = 1
 gid = 2
-log_dir = '/tmp'
+log_dir = '/tmp2'
 cat_stat_dir = '/var/log'
 zk_acl = ('a', 'b')
 zk_auth = ('digest', 'xp', '123')

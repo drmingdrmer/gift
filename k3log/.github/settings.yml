@@ -1,0 +1,6 @@
+_extends: gh-config
+
+repository:
+  description: k3log is a collection of log utilities.
+  homepage: https://blog.openacid.com
+  topics: logging, stack
