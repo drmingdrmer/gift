@@ -73,6 +73,7 @@ class Gift(object):
         self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])
 
     def out(self, fd, *msg):
+        #  TODO not used?
 
         os.write(fd, b"GIFT: ")
 
@@ -225,7 +226,7 @@ class Gift(object):
             g.out(2, "add remote:", up["name"], up["url"])
             g.remote_add(up["name"], up["url"], capture=False)
 
-        r = g.ref_get(up["name"] + '/' + up["branch"])
+        r = g.rev_of(up["name"] + '/' + up["branch"])
         if r is None:
             dd("remote head not found:", up["name"] + '/' + up["branch"])
             dd("need fetch")
@@ -239,7 +240,7 @@ class Gift(object):
             os.makedirs(path, mode=0o755)
 
         g = self._g(sb)
-        if g.ref_get("HEAD") is None:
+        if g.rev_of("HEAD") is None:
             dd("HEAD not found:")
             g.checkout(sb['upstream']["branch"])
 
@@ -530,6 +531,7 @@ class Git(object):
         self.ctxmsg = ctxmsg
 
     def out(self, fd, *msg):
+        #  TODO not used?
 
         os.write(fd, b"GIFT: ")
 
@@ -552,6 +554,16 @@ class Git(object):
         return self.opt.to_args()
 
     def commit_of(self, ref):
+        """
+        Get the hash of a commit.
+
+        Args:
+
+            ref(str): short hash, full length hash, ref name or branch.
+
+        Returns:
+            str: sha256 in lower-case hex.
+        """
         return self.cmd0("rev-parse", ref)
 
     def blob_new(self, f):
@@ -566,7 +578,17 @@ class Git(object):
     def get_tree(self, commit):
         return self.cmd0("rev-parse", commit + "^{tree}")
 
-    def ref_get(self, name):
+    def rev_of(self, name):
+        """
+        Get the revision(sha256) of an object.
+
+        Args:
+
+            name(str): could be short hash, full length hash, ref name or branch.
+
+        Returns:
+            str: sha256 in lower-case hex. If no such object is found, it returns None.
+        """
         try:
             return self.cmd0("rev-parse", "--verify", "--quiet", name)
         except CalledProcessError:

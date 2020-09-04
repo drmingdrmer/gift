@@ -112,19 +112,19 @@ class BaseTest(unittest.TestCase):
 
 class TestGit(BaseTest):
 
-    def test_ref_get(self):
+    def test_rev_of(self):
         # TODO
         g = Git(GitOpt(), cwd=superp)
-        t = g.ref_get("abc")
+        t = g.rev_of("abc")
         self.assertIsNone(t)
 
-        t = g.ref_get("master")
+        t = g.rev_of("master")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
-        t = g.ref_get("refs/heads/master")
+        t = g.rev_of("refs/heads/master")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
-        t = g.ref_get("c3954c897dfe40a5b99b7145820eeb227210265c")
+        t = g.rev_of("c3954c897dfe40a5b99b7145820eeb227210265c")
         self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
 
     def test_remote_get(self):
