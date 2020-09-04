@@ -22,6 +22,7 @@ from k3handy import cmdtty
 from k3handy import cmdx
 from k3handy import dd
 from k3handy import ddstack
+from k3handy import display
 
 version = '0.1.0'
 conffn = ".gift"
@@ -29,11 +30,6 @@ refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
 
 logger = logging.getLogger(__name__)
-
-def _out(f, line):
-    os.write(f, to_utf8(line))
-    os.write(f, b"\n")
-
 
 def pj(*args):
     return os.path.join(*args)
@@ -295,7 +291,7 @@ class Gift(object):
     def exec_informative_cmd(self, cmds):
         cmd = cmds[0]
         if cmd == '--version':
-            _out(1, "gift version " + version)
+            display(1, "gift version " + version)
             self._g().cmdpass('--version')
         elif cmd == '--help':
             self._g().cmdpass('--help')
@@ -312,7 +308,7 @@ class Gift(object):
             ]
             # TODO finish them
             for l in lines:
-                _out(1, l)
+                display(1, l)
         elif cmd in ('--exec-path',
                      '--man-path',
                      '--info-path',
@@ -709,13 +705,6 @@ class Git(object):
         return cmdpass(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
 
 
-def display(out, err):
-    for l in out:
-        _out(1, l)
-    for l in err:
-        _out(2, l)
-
-
 class GitOpt(object):
 
     # informative options just query for some info instead of doing anything.
@@ -901,14 +890,14 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if cmds != [] and cmds[0] == 'gift-debug':
-        _out(1, ' '.join(cmds))
-        _out(1, yaml.dump({"opt": gitopt.opt,
+        display(1, ' '.join(cmds))
+        display(1, yaml.dump({"opt": gitopt.opt,
                            "informative_cmds": gitopt.informative_cmds,
                            "additional": gitopt.additional},
                           default_flow_style=False))
-        _out(1, "evaluated cwd: " + str(gift.cwd))
-        _out(1, "evaluated git_dir: " + str(gift.git_dir))
-        _out(1, "evaluated working_dir: " + str(gift.working_dir))
+        display(1, "evaluated cwd: " + str(gift.cwd))
+        display(1, "evaluated git_dir: " + str(gift.git_dir))
+        display(1, "evaluated working_dir: " + str(gift.working_dir))
         sys.exit(0)
 
     try:
@@ -923,5 +912,5 @@ if __name__ == "__main__":
         display(e.out, e.err)
         sys.exit(e.returncode)
     except KeyboardInterrupt:
-        _out(2, "user interrupted")
+        display(2, "user interrupted")
         sys.exit(1)
