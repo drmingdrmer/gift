@@ -376,7 +376,7 @@ class TestGiftDelegate(BaseTest):
 
             'gift-debug',
             'additional: {}',
-            'infos: {}',
+            'informative_cmds: {}',
             'opt:',
             '  bare: false',
             '  confkv: []',
@@ -388,8 +388,6 @@ class TestGiftDelegate(BaseTest):
             '  startpath: []',
             '  super_prefix: null',
             '  work_tree: null',
-            '',
-            'simple_cmd: null',
             '',
             'evaluated cwd: ' + this_base + '/testdata/super',
             'evaluated git_dir: None',

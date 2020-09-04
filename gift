@@ -29,7 +29,6 @@ refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
 
 logger = logging.getLogger(__name__)
-giftopt = {'verbose' : 0}
 
 def _out(f, line):
     os.write(f, to_utf8(line))
@@ -293,7 +292,7 @@ class Gift(object):
         else:
             return '', None
 
-    def simple_cmd(self, cmds):
+    def informative_cmd(self, cmds):
         cmd = cmds[0]
         if cmd == '--version':
             _out(1, "gift version " + version)
@@ -719,13 +718,15 @@ def display(out, err):
 
 class GitOpt(object):
 
-    info_opts = ('--version',
-                 '--help',
-                 '--html-path',
-                 '--info-path',
-                 '--man-path',
-                 '--exec-path',
-                 )
+    # informative options just query for some info instead of doing anything.
+    informative_opts = (
+            '--version',
+            '--help',
+            '--html-path',
+            '--info-path',
+            '--man-path',
+            '--exec-path',
+    )
 
     def __init__(self):
         self.opt = {
@@ -740,7 +741,7 @@ class GitOpt(object):
             "super_prefix": None,
             "exec_path": None,
         }
-        self.infos = {}
+        self.informative_cmds = {}
         self.additional = {}
 
         self.cmds = []
@@ -753,7 +754,7 @@ class GitOpt(object):
     def clone(self):
         o = GitOpt()
         o.opt = copy.deepcopy(self.opt)
-        o.infos = copy.deepcopy(self.infos)
+        o.informative_cmds = copy.deepcopy(self.informative_cmds)
         o.additional = copy.deepcopy(self.additional)
         return o
 
@@ -761,8 +762,8 @@ class GitOpt(object):
         while len(args) > 0:
             arg = args.pop(0)
 
-            if arg in self.info_opts:
-                self.infos[arg] = arg
+            if arg in self.informative_opts:
+                self.informative_cmds[arg] = arg
                 continue
 
             if arg == '-C':
@@ -865,26 +866,19 @@ def git_args():
 
     gitopt = GitOpt().parse_args(args, {'--gift-verbose': True})
 
-    giftopt = {
-        "simple_cmd": None,
-    }
-
     verbose = 0
     v = os.environ.get('GIFT_VERBOSE')
     if v is not None:
         verbose = int(v)
 
-    if len(gitopt.infos) > 0:
-        giftopt["simple_cmd"] = list(gitopt.infos)[0]
-
     if '--gift-verbose' in gitopt.additional:
         verbose = 1
 
-    return gitopt, giftopt, verbose, gitopt.cmds
+    return gitopt, verbose, gitopt.cmds
 
 
 if __name__ == "__main__":
-    gitopt, giftopt, verbose, cmds = git_args()
+    gitopt, verbose, cmds = git_args()
 
     dd("gift opt:", gitopt.opt)
     dd("gift cmds:", cmds)
@@ -902,25 +896,24 @@ if __name__ == "__main__":
             fmt= '[%(asctime)s,%(filename)s,%(lineno)d,%(levelname)s] %(message)s',
             level=lvl)
 
-    if cmds == [] and giftopt['simple_cmd'] is None:
-        gift.simple_cmd(['--help'])
+    if cmds == [] and len(gitopt.informative_cmds) == 0:
+        gift.informative_cmd(['--help'])
         sys.exit(1)
 
     if cmds != [] and cmds[0] == 'gift-debug':
         _out(1, ' '.join(cmds))
         _out(1, yaml.dump({"opt": gitopt.opt,
-                           "infos": gitopt.infos,
+                           "informative_cmds": gitopt.informative_cmds,
                            "additional": gitopt.additional},
                           default_flow_style=False))
-        _out(1, yaml.dump(giftopt, default_flow_style=False))
         _out(1, "evaluated cwd: " + str(gift.cwd))
         _out(1, "evaluated git_dir: " + str(gift.git_dir))
         _out(1, "evaluated working_dir: " + str(gift.working_dir))
         sys.exit(0)
 
     try:
-        if giftopt['simple_cmd'] is not None:
-            gift.simple_cmd([giftopt['simple_cmd']])
+        if len(gitopt.informative_cmds) > 0:
+            gift.informative_cmd(list(gitopt.informative_cmds))
         else:
             gift.cmd(cmds)
     except CalledProcessError as e:
