@@ -12,17 +12,17 @@ import unittest
 
 from k3fs import fread
 from k3fs import fwrite
+from k3handy import cmd0
+from k3handy import cmdout
+from k3handy import cmdtty
+from k3handy import cmdx
+from k3handy import pjoin
+from k3handy import dd
 
 gift = imp.load_source('gift', './gift')
 
 CalledProcessError = gift.CalledProcessError
 GitOpt = gift.GitOpt
-cmdx = gift.cmdx
-cmdtty = gift.cmdtty
-cmdout = gift.cmdout
-cmd0 = gift.cmd0
-pj = gift.pj
-dd = gift.dd
 
 Git = gift.Git
 Gift = gift.Gift
@@ -31,30 +31,30 @@ Gift = gift.Gift
 # root of this repo
 this_base = os.path.dirname(__file__)
 
-giftp = pj(this_base, "gift")
+giftp = pjoin(this_base, "gift")
 origit = "git"
 
-emptyp = pj(this_base, "testdata", "empty")
-superp = pj(this_base, "testdata", "super")
-supergitp = pj(this_base, "testdata", "supergit")
-subbarp = pj(this_base, "testdata", "super", "foo", "bar")
-subwowp = pj(this_base, "testdata", "super", "foo", "wow")
-bargitp = pj(this_base, "testdata", "bargit")
-barp = pj(this_base, "testdata", "bar")
+emptyp = pjoin(this_base, "testdata", "empty")
+superp = pjoin(this_base, "testdata", "super")
+supergitp = pjoin(this_base, "testdata", "supergit")
+subbarp = pjoin(this_base, "testdata", "super", "foo", "bar")
+subwowp = pjoin(this_base, "testdata", "super", "foo", "wow")
+bargitp = pjoin(this_base, "testdata", "bargit")
+barp = pjoin(this_base, "testdata", "bar")
 
 execpath = cmd0(origit, '--exec-path')
 
 
 def _clean_case():
     for d in ("empty", ):
-        p = pj(this_base, "testdata", d)
-        if os.path.exists(pj(p, ".git")):
+        p = pjoin(this_base, "testdata", d)
+        if os.path.exists(pjoin(p, ".git")):
             cmdx(origit, "reset", "--hard", cwd=p)
             cmdx(origit, "clean", "-dxf", cwd=p)
 
-    force_remove(pj(this_base, "testdata", "empty", "bar"))
-    force_remove(pj(this_base, "testdata", "empty", ".git"))
-    force_remove(pj(this_base, "testdata", "super", ".git"))
+    force_remove(pjoin(this_base, "testdata", "empty", "bar"))
+    force_remove(pjoin(this_base, "testdata", "empty", ".git"))
+    force_remove(pjoin(this_base, "testdata", "super", ".git"))
     force_remove(barp)
     cmdx(origit, "reset", "testdata", cwd=this_base)
     cmdx(origit, "checkout", "testdata", cwd=this_base)
@@ -70,7 +70,7 @@ class BaseTest(unittest.TestCase):
 
         # .git can not be track in a git repo.
         # need to manually create it.
-        fwrite(pj(this_base, "testdata", "super", ".git"),
+        fwrite(pjoin(this_base, "testdata", "super", ".git"),
                    "gitdir: ../supergit")
 
     def tearDown(self):
@@ -90,7 +90,7 @@ class BaseTest(unittest.TestCase):
         self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", out[0])
 
     def _add_file_to_subbar(self):
-        fwrite(pj(subbarp, "newbar"), "newbar")
+        fwrite(pjoin(subbarp, "newbar"), "newbar")
         cmdx(giftp, "add", "newbar", cwd=subbarp)
         cmdx(giftp, "commit", "-m", "add newbar", cwd=subbarp)
 
@@ -101,12 +101,12 @@ class BaseTest(unittest.TestCase):
         self.assertEqual(lines, out)
 
     def _nofile(self, *ps):
-        self.assertFalse(os.path.isfile(pj(*ps)), "no file in " + pj(*ps))
+        self.assertFalse(os.path.isfile(pjoin(*ps)), "no file in " + pjoin(*ps))
 
     def _fcontent(self, txt, *ps):
-        self.assertTrue(os.path.isfile(pj(*ps)), pj(*ps) + " should exist")
+        self.assertTrue(os.path.isfile(pjoin(*ps)), pjoin(*ps) + " should exist")
 
-        actual = fread(pj(*ps))
+        actual = fread(pjoin(*ps))
         self.assertEqual(txt, actual, "check file content")
 
 
@@ -148,7 +148,7 @@ class TestGit(BaseTest):
         self.assertEqual("newremote-url", t)
 
     def test_blob_new(self):
-        fwrite(pj(superp, "newblob"), "newblob!!!")
+        fwrite(pjoin(superp, "newblob"), "newblob!!!")
         # TODO
         g = Git(GitOpt(), cwd=superp)
         blobhash = g.blob_new("newblob")
@@ -248,13 +248,13 @@ class TestGiftAPI(BaseTest):
         }))
         gg.init_git_config()
 
-        rel, sb = gg.get_subrepo_config(pj(superp, "f"))
+        rel, sb = gg.get_subrepo_config(pjoin(superp, "f"))
         self.assertEqual(('', None), (rel, sb), "inexistent path")
 
-        rel, sb = gg.get_subrepo_config(pj(superp, "foo"))
+        rel, sb = gg.get_subrepo_config(pjoin(superp, "foo"))
         self.assertEqual(('', None), (rel, sb), "inexistent path foo")
 
-        rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
+        rel, sb = gg.get_subrepo_config(pjoin(superp, "foo/bar"))
         self.assertEqual('foo/bar', rel)
         self.assertEqual({
             'bareenv': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar'},
@@ -280,7 +280,7 @@ class TestGiftPartialInit(BaseTest):
         }))
         gg.init_git_config()
 
-        rel, sb = gg.get_subrepo_config(pj(superp, "foo/bar"))
+        rel, sb = gg.get_subrepo_config(pjoin(superp, "foo/bar"))
         self.gg = gg
         self.sb = sb
         self.rel = rel
@@ -319,7 +319,7 @@ class TestGiftPartialInit(BaseTest):
         cmdx(origit, "checkout", self.sb['upstream']['branch'], env=self.sb['env'])
         self._fcontent("bar\n", subbarp, "bar")
 
-        os.unlink(pj(subbarp, "bar"))
+        os.unlink(pjoin(subbarp, "bar"))
 
         # init --sub should not checkout again to modify work tree
         cmdx(giftp, "init", "--sub", cwd=superp)
@@ -444,8 +444,8 @@ class TestGiftDelegate(BaseTest):
         with tempfile.TemporaryDirectory() as tmpdir:
             out = cmdout(giftp,
                          '-C', this_base,
-                         '--git-dir=' + pj('testdata', 'supergit'),
-                         '--work-tree=' + pj("testdata", 'super'),
+                         '--git-dir=' + pjoin('testdata', 'supergit'),
+                         '--work-tree=' + pjoin("testdata", 'super'),
                          "ls-files",
                          cwd=tmpdir)
 
@@ -564,7 +564,7 @@ class TestGift(BaseTest):
             cmdx(giftp, "clone", bargitp, "bar", cwd=tmpdir)
             self._gitoutput([giftp, "ls-files"], [
                 "bar"
-            ], cwd=pj(tmpdir, 'bar'))
+            ], cwd=pjoin(tmpdir, 'bar'))
 
             self._fcontent("bar\n", tmpdir, "bar/bar")
 
@@ -573,7 +573,7 @@ class TestGift(BaseTest):
         cmdx(giftp, "clone", "../bargit", "bar", cwd=emptyp)
         self._gitoutput([giftp, "ls-files"], [
             "bar"
-        ], cwd=pj(emptyp, "bar"))
+        ], cwd=pjoin(emptyp, "bar"))
 
         self._fcontent("bar\n", emptyp, "bar/bar")
 
@@ -707,7 +707,7 @@ class TestGift(BaseTest):
     def _add_commit_to_bar_from_other_clone(self):
         cmdx(origit, "clone", bargitp, barp)
 
-        fwrite(pj(barp, "for_fetch"), "for_fetch")
+        fwrite(pjoin(barp, "for_fetch"), "for_fetch")
         cmdx(origit, "add", "for_fetch", cwd=barp)
         cmdx(origit, "commit", "-m", "add for_fetch", cwd=barp)
         cmdx(origit, "push", "origin", "master", cwd=barp)
@@ -758,7 +758,7 @@ class TestGift(BaseTest):
 
         head_of_bar = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
-        state0 = fread(pj(superp, ".gift-refs"))
+        state0 = fread(pjoin(superp, ".gift-refs"))
 
         self._add_file_to_subbar()
         cmdx(giftp, "commit", "--sub", cwd=superp)
@@ -766,7 +766,7 @@ class TestGift(BaseTest):
         head1 = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
         self.assertNotEqual(head_of_bar, head1)
 
-        state1 = fread(pj(superp, ".gift-refs"))
+        state1 = fread(pjoin(superp, ".gift-refs"))
         self.assertNotEqual(state0, state1)
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo

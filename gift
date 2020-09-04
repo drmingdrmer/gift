@@ -23,6 +23,9 @@ from k3handy import cmdx
 from k3handy import dd
 from k3handy import ddstack
 from k3handy import display
+from k3handy import pabs
+from k3handy import pjoin
+from k3handy import prebase
 
 version = '0.1.0'
 conffn = ".gift"
@@ -30,29 +33,6 @@ refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
 
 logger = logging.getLogger(__name__)
-
-def pj(*args):
-    return os.path.join(*args)
-
-
-def pabs(*args):
-    p = os.path.abspath(pj(*args))
-    return os.path.normpath(p)
-
-
-def prebase(base, p):
-    '''
-    rebaase path p on to base
-    '''
-    if p is None:
-        return None
-    if os.path.isabs(p):
-        return p
-
-    if base is None:
-        return pabs(p)
-
-    return pabs(base, p)
 
 
 class GiftError(Exception):
@@ -75,7 +55,7 @@ class Gift(object):
         if self.gitopt.opt.get('exec_path') is None:
             self.gitpath = 'git'
         else:
-            self.gitpath = pj(self.gitopt.opt['exec_path'], 'git')
+            self.gitpath = pjoin(self.gitopt.opt['exec_path'], 'git')
         self.in_git_dir = False
 
         # When multiple -C options are given, each subsequent non-absolute -C
@@ -176,12 +156,12 @@ class Gift(object):
                 "refhead": "refs/gift/sub/{dir}".format(dir=k),
                 "sub_gitdir": sub_gitdir,
                 "env": {
-                    "GIT_DIR": pj(self.git_dir, sub_gitdir),
-                    "GIT_WORK_TREE": pj(self.working_dir, k),
-                    # "GIT_OBJECT_DIRECTORY": pj(self.git_dir, "objects"),
+                    "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
+                    "GIT_WORK_TREE": pjoin(self.working_dir, k),
+                    # "GIT_OBJECT_DIRECTORY": pjoin(self.git_dir, "objects"),
                 },
                 "bareenv": {
-                    "GIT_DIR": pj(self.git_dir, sub_gitdir),
+                    "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
                 },
             }
 
@@ -227,7 +207,7 @@ class Gift(object):
 
     def try_init_sub_git(self, sb):
 
-        wtgpath = pj(self.git_dir, sb["sub_gitdir"])
+        wtgpath = pjoin(self.git_dir, sb["sub_gitdir"])
 
         bareenv = sb['bareenv']
         up = sb["upstream"]
@@ -442,7 +422,7 @@ class Gift(object):
             self.check_worktree(sb)
 
         try:
-            cont = fread(pj(self.working_dir, refsfn))
+            cont = fread(pjoin(self.working_dir, refsfn))
         except IOError:
             # TODO message
             pass
@@ -463,7 +443,7 @@ class Gift(object):
 
         refs = sorted(refs)
         cont = yaml.dump(refs, default_flow_style=False)
-        statep = pj(self.working_dir, refsfn)
+        statep = pjoin(self.working_dir, refsfn)
         fwrite(statep, cont)
 
         statehash = g.blob_new(statep)
