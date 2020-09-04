@@ -1,29 +1,21 @@
 """
-package-name is utility to create sub process.
+k3git is wrapper of git command-line.
 
-Execute a shell script::
+To parse a git command ``git --git-dir=/foo fetch origin``:
 
-    import pk3proc
+    >>> GitOpt().parse_args(['--git-dir=/foo', 'fetch', 'origin']).cmds
+    ['fetch', 'origin']
 
-    # execute a shell script
-
-    returncode, out, err = pk3proc.shell_script('ls / | grep bin')
-    print returncode
-    print out
-    # output:
-    # > 0
-    # > bin
-    # > sbin
-
-Run a command::
-
-    # Unlike the above snippet, following statement does not start an sh process.
-    returncode, out, err = pk3proc.command('ls', 'a*', cwd='/usr/local')
+    >>> GitOpt().parse_args(['--git-dir=/foo', 'fetch', 'origin']).to_args()
+    ['--git-dir=/foo']
 
 """
 
-# from .proc import CalledProcessError
-# from .proc import ProcError
+__version__ = "0.1.0"
+__name__ = "k3git"
 
-__version__ = "0.2.2"
-_name = "pk3proc"
+from .gitopt import GitOpt
+
+__all__ = [
+    'GitOpt',
+]

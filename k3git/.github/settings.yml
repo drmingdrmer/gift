@@ -1,6 +1,6 @@
 _extends: gh-config
 
 repository:
-  description: no desc
+  description: wrapper of git command-line
   homepage: https://blog.openacid.com
-  topics: tag1, tag2
+  topics: git, cli, commandline
