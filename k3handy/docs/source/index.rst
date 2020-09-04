@@ -30,6 +30,7 @@ Sub process
 -----------
 
 .. autofunction::  cmd0
+.. autofunction::  cmdf
 .. autofunction::  cmdout
 .. autofunction::  cmdpass
 .. autofunction::  cmdtty

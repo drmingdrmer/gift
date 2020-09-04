@@ -48,6 +48,54 @@ def ddstack(*msg):
                 line = line[0].strip()
             logger.debug("stack: %d %s %s", ln, func, line, **ddstack_kwarg)
 
+def cmdf(cmd, *arguments, flag='', **options):
+    """
+    Alias to k3proc.command(). Behaviors is specified with ``flag``
+
+    Args:
+        cmd(str): the path to executable.
+
+        arguments: arguments
+
+        flag(str): str flags.
+
+            - 'x': raise CalledProcessError if return code is not 0
+            - 't': start sub process in a tty.
+            - 'p': do not capture stdin, stdout and stderr.
+            - 'o': only return stdout in list of str.
+            - '0': only return the first line of stdout.
+
+        options: other options pass to k3proc.command().
+
+    Returns:
+        str: first line of stdout.
+    """
+    dd("cmdf:", cmd, arguments, options)
+    dd("flag:", flag)
+
+    if 'x' in flag:
+        options['check'] = True
+    if 't' in flag:
+        options['tty'] = True
+    if 'p' in flag:
+        options['capture'] = False
+
+    code, out, err = command(cmd, *arguments, **options)
+
+    out = out.splitlines()
+    err = err.splitlines()
+
+    if 'o' in flag:
+        dd("cmdf: out:", out)
+        return out
+
+    if '0' in flag:
+        dd("cmdf: out:", out)
+        if len(out) > 0:
+            return out[0]
+        return ''
+
+    return code, out, err
 
 def cmd0(cmd, *arguments, **options):
     """
