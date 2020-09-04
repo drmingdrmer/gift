@@ -61,6 +61,7 @@ def cmdf(cmd, *arguments, flag='', **options):
 
             - 'x': raise CalledProcessError if return code is not 0
             - 't': start sub process in a tty.
+            - 'n': if return code is not 0, return None.
             - 'p': do not capture stdin, stdout and stderr.
             - 'o': only return stdout in list of str.
             - '0': only return the first line of stdout.
@@ -81,6 +82,10 @@ def cmdf(cmd, *arguments, flag='', **options):
         options['capture'] = False
 
     code, out, err = command(cmd, *arguments, **options)
+
+    # reaching here means there is no check of exception
+    if code != 0 and 'n' in flag:
+        return None
 
     out = out.splitlines()
     err = err.splitlines()

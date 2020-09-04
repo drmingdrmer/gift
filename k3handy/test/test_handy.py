@@ -78,6 +78,14 @@ class TestHandyCmd(unittest.TestCase):
                 flag='0',
         )
 
+        # return None if error
+        got = k3handy.cmdf(
+                'python', '-c',
+                'import sys; sys.exit(5)',
+                flag='n0',
+        )
+        self.assertEqual(None, got)
+
         #  raise with 'x'
         self.assertRaises(k3handy.CalledProcessError,
                           k3handy.cmdf,
