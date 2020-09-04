@@ -15,7 +15,7 @@ from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
 from k3handy import cmd0
-from k3handy import cmdout
+from k3handy import cmdf
 from k3handy import cmdpass
 from k3handy import cmdtty
 from k3handy import cmdx
@@ -231,7 +231,7 @@ class Gift(object):
             dd("remote head not found:", up["name"] + '/' + up["branch"])
             dd("need fetch")
             g.out(2, "fetch", up["name"], up["url"])
-            g.fetch(up["name"], capture=False)
+            g.fetch(up["name"], flag='xp')
 
     def try_init_sub_worktree(self, sb):
 
@@ -434,7 +434,7 @@ class Gift(object):
 
     def x_commit_sub(self, cmds):
         g = self._g()
-        supertree = g.get_tree("HEAD")
+        supertree = g.get_tree("HEAD", flag='x')
         parent = g.commit_of("HEAD")
         refs = []
         for sub in self.conf["dirs"]:
@@ -448,7 +448,7 @@ class Gift(object):
         statep = pjoin(self.working_dir, refsfn)
         fwrite(statep, cont)
 
-        statehash = g.blob_new(statep)
+        statehash = g.blob_new(statep, flag='x')
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
 
         newcommit = g.cmd0("commit-tree", "-p", parent, supertree, input="commit subdirs")
@@ -509,7 +509,7 @@ class Gift(object):
 
         g.cmdx("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"])
 
-        sub_tree = g.get_tree(sb["refhead"])
+        sub_tree = g.get_tree(sb["refhead"], flag='x')
         supertree = g.tree_add_obj(supertree, sb["dir"], sub_tree)
 
         return supertree, g.commit_of(sb["refhead"])
@@ -553,7 +553,7 @@ class Git(object):
     def _args(self):
         return self.opt.to_args()
 
-    def commit_of(self, ref):
+    def commit_of(self, ref, flag=''):
         """
         Get the hash of a commit.
 
@@ -561,24 +561,26 @@ class Git(object):
 
             ref(str): short hash, full length hash, ref name or branch.
 
+            flag(str): flag='x' to raise if return code is not 0. flag='' to return None.
+
         Returns:
             str: sha256 in lower-case hex.
         """
-        return self.cmd0("rev-parse", ref)
+        return self.cmdf("rev-parse", ref, flag=flag+'n0')
 
-    def blob_new(self, f):
-        return self.cmd0("hash-object", "-w", f)
+    def blob_new(self, f, flag=''):
+        return self.cmdf("hash-object", "-w", f, flag=flag+'n0')
 
-    def checkout(self, branch):
-        self.cmdx("checkout", branch)
+    def checkout(self, branch, flag='x'):
+        self.cmdf("checkout", branch, flag=flag)
 
-    def fetch(self, name, **options):
-        self.cmdx("fetch", name, **options)
+    def fetch(self, name, flag=''):
+        self.cmdf("fetch", name, flag=flag)
 
-    def get_tree(self, commit):
-        return self.cmd0("rev-parse", commit + "^{tree}")
+    def get_tree(self, commit, flag=''):
+        return self.cmdf("rev-parse", commit + "^{tree}", flag=flag+'n0')
 
-    def rev_of(self, name):
+    def rev_of(self, name, flag=''):
         """
         Get the revision(sha256) of an object.
 
@@ -586,28 +588,24 @@ class Git(object):
 
             name(str): could be short hash, full length hash, ref name or branch.
 
+            flag(str): flag='x' to raise if return code is not 0. flag='' to return None.
+
         Returns:
             str: sha256 in lower-case hex. If no such object is found, it returns None.
         """
-        try:
-            return self.cmd0("rev-parse", "--verify", "--quiet", name)
-        except CalledProcessError:
-            return None
+        return self.cmdf("rev-parse", "--verify", "--quiet", name, flag=flag+'n0')
 
-    def remote_get(self, name):
-        try:
-            return self.cmd0("remote", "get-url", name)
-        except CalledProcessError:
-            return None
+    def remote_get(self, name, flag=''):
+        return self.cmdf("remote", "get-url", name, flag=flag+'n0')
 
-    def remote_add(self, name, url, **options):
-        self.cmdx("remote", "add", name, url, **options)
+    def remote_add(self, name, url, flag='x', **options):
+        self.cmdf("remote", "add", name, url, **options, flag=flag)
 
-    def tree_items(self, treeish, name_only=False):
+    def tree_items(self, treeish, name_only=False, flag='x'):
         args = []
         if name_only:
             args.append("--name-only")
-        return self.cmdout("ls-tree", treeish, *args)
+        return self.cmdf("ls-tree", treeish, *args, flag=flag+'no')
 
     def tree_add_obj(self, cur_tree, path, treeish):
 
@@ -616,7 +614,7 @@ class Git(object):
         itms = self.tree_items(cur_tree)
 
         if sep not in path:
-            return self.tree_new(itms, path, treeish)
+            return self.tree_new(itms, path, treeish, flag='x')
 
         # a/b/c -> a, b/c
         p0, left = path.split(sep, 1)
@@ -626,13 +624,13 @@ class Git(object):
 
             newsubtree = treeish
             for p in reversed(left.split(sep)):
-                newsubtree = self.tree_new([], p, newsubtree)
+                newsubtree = self.tree_new([], p, newsubtree, flag='x')
         else:
 
             subtree = p0item["object"]
             newsubtree = self.tree_add_obj(subtree, left, treeish)
 
-        return self.tree_new(itms, p0, newsubtree)
+        return self.tree_new(itms, p0, newsubtree, flag='x')
 
     def tree_find_item(self, treeish, fn=None, typ=None):
         for itm in self.tree_items(treeish):
@@ -670,9 +668,9 @@ class Git(object):
 
         return rst
 
-    def tree_new(self, itms, name, obj):
+    def tree_new(self, itms, name, obj, flag=''):
 
-        typ = self.obj_type(obj)
+        typ = self.obj_type(obj, flag='x')
         item_fmt = "{mode} {typ} {object}\t{name}"
 
         newitems = [x for x in itms
@@ -689,23 +687,23 @@ class Git(object):
                               name=name
                               )
         newitems.append(itm)
-        new_treeish = self.cmd0("mktree", input="\n".join(newitems))
+        new_treeish = self.cmdf("mktree", input="\n".join(newitems), flag=flag+'n0')
         return new_treeish
 
-    def obj_type(self, obj):
-        return self.cmd0("cat-file", "-t", obj)
+    def obj_type(self, obj, flag=''):
+        return self.cmdf("cat-file", "-t", obj, flag=flag+'n0')
+
+    def cmdf(self, *args, flag='', **kwargs):
+        return cmdf(self.gitpath, *self._args(), *args, flag=flag, **self._opt(**kwargs))
 
     def cmd0(self, *args, **kwargs):
-        return cmd0(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
-
-    def cmdout(self, *args, **kwargs):
-        return cmdout(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
+        return self.cmdf(*args, **kwargs, flag='x0')
 
     def cmdx(self, *args, **kwargs):
-        return cmdx(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
+        return self.cmdf(*args, **kwargs, flag='x')
 
     def cmdpass(self, *args, **kwargs):
-        return cmdpass(self.gitpath, *self._args(), *args, **self._opt(**kwargs))
+        return self.cmdf(*args, **kwargs, flag='xp')
 
 
 def git_args():
