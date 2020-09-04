@@ -41,6 +41,11 @@ Logging
 .. autofunction::  dd
 .. autofunction::  ddstack
 
+Stdout and Stderr
+------------------
+
+.. autofunction::  display
+
 Indices and tables
 ==================
 

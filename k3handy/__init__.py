@@ -5,6 +5,7 @@ k3handy is collection of mostly used  utilities.
 __version__ = "0.1.0"
 __name__ = "k3handy"
 
+import os
 import sys
 import logging
 import inspect
@@ -13,6 +14,7 @@ import inspect
 from k3proc import command
 from k3proc import CalledProcessError
 from k3proc import TimeoutExpired
+from k3str import to_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -119,3 +121,34 @@ def cmdpass(cmd, *arguments, **options):
     dd("cmdpass:", cmd, arguments, options)
     options['capture'] = False
     return cmdx(cmd, *arguments, **options)
+
+def display(stdout, stderr=None):
+    """
+    Output to stdout and stderr.
+    - ``display(1, "foo")`` write to stdout.
+    - ``display(1, ["foo", "bar"])`` write multilines to stdout.
+    - ``display(1, ("foo", "bar"))`` write multilines to stdout.
+    - ``display(("foo", "bar"), ["woo"])`` write multilines to stdout and stderr.
+    - ``display(None, ["woo"])`` write multilines to stderr.
+
+    """
+
+    if isinstance(stdout, int):
+        fd = stdout
+        line = stderr
+
+        if isinstance(line, (list, tuple)):
+            lines = line
+            for l in lines:
+                display(fd, l)
+            return
+
+        os.write(fd, to_bytes(line))
+        os.write(fd, b"\n")
+        return
+
+    if stdout is not None:
+        display(1, stdout)
+
+    if stderr is not None:
+        display(2, stderr)

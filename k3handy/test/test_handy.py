@@ -42,8 +42,8 @@ foo()
             script.format(level="DEBUG")
         )
         self.assertEqual([
-                "DEBUG:k3handy:stack: 6 foo ", 
-                "DEBUG:k3handy:stack: 7 <module> ", 
+                "DEBUG:k3handy:stack: 6 foo ",
+                "DEBUG:k3handy:stack: 7 <module> ",
         ], got)
 
         got = k3handy.cmdout(
@@ -132,3 +132,26 @@ k3handy.cmdpass(
 
         self.assertEqual(0, returncode)
         self.assertEqual(["123"], out)
+
+
+class TestHandyDisplay(unittest.TestCase):
+
+    def test_display(self):
+
+        for cmd, want in (
+                ('display(1, "foo")', (["foo"], [])),
+                ('display(2, "foo")', ([], ["foo"])),
+                ('display(2, ["foo", "bar"])', ([], ["foo", "bar"])),
+                ('display(None, ["foo", "bar"])', ([], ["foo", "bar"])),
+                ('display(["foo", "bar"], None)', (["foo", "bar"], [])),
+                ('display(["foo", "bar"])', (["foo", "bar"], [])),
+                ('display(["foo", "bar"], ["woo"])', (["foo", "bar"], ["woo"])),
+                ('display("foo", "bar")', (["foo"], ["bar"])),
+        ):
+
+            _, out, err = k3handy.cmdx(
+                'python', '-c',
+                'import k3handy; k3handy.{}'.format(cmd),
+            )
+
+            self.assertEqual(want, (out, err))
