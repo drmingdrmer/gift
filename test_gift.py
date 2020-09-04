@@ -161,7 +161,7 @@ class TestGit(BaseTest):
         # TODO opt
         g = Git(GitOpt(), cwd=superp)
 
-        roottreeish = g.get_tree("HEAD")
+        roottreeish = g.tree_of("HEAD")
 
         dd(cmdx(origit, "ls-tree", "87486e2d4543eb0dd99c1064cc87abdf399cde9f", cwd=superp))
         self.assertEqual("87486e2d4543eb0dd99c1064cc87abdf399cde9f", roottreeish)
