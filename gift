@@ -292,7 +292,7 @@ class Gift(object):
         else:
             return '', None
 
-    def informative_cmd(self, cmds):
+    def exec_informative_cmd(self, cmds):
         cmd = cmds[0]
         if cmd == '--version':
             _out(1, "gift version " + version)
@@ -897,7 +897,7 @@ if __name__ == "__main__":
             level=lvl)
 
     if cmds == [] and len(gitopt.informative_cmds) == 0:
-        gift.informative_cmd(['--help'])
+        gift.exec_informative_cmd(['--help'])
         sys.exit(1)
 
     if cmds != [] and cmds[0] == 'gift-debug':
@@ -913,7 +913,7 @@ if __name__ == "__main__":
 
     try:
         if len(gitopt.informative_cmds) > 0:
-            gift.informative_cmd(list(gitopt.informative_cmds))
+            gift.exec_informative_cmd(list(gitopt.informative_cmds))
         else:
             gift.cmd(cmds)
     except CalledProcessError as e:
