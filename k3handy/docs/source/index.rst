@@ -46,6 +46,13 @@ Stdout and Stderr
 
 .. autofunction::  display
 
+Path
+------------------
+
+.. autofunction::  pjoin
+.. autofunction::  pabs
+.. autofunction::  prebase
+
 Indices and tables
 ==================
 
