@@ -12,6 +12,7 @@ import unittest
 
 from k3fs import fread
 from k3fs import fwrite
+from k3git import GitOpt
 from k3handy import cmd0
 from k3handy import cmdout
 from k3handy import cmdtty
@@ -22,7 +23,6 @@ from k3handy import dd
 gift = imp.load_source('gift', './gift')
 
 CalledProcessError = gift.CalledProcessError
-GitOpt = gift.GitOpt
 
 Git = gift.Git
 Gift = gift.Gift
@@ -791,36 +791,6 @@ class TestGift(BaseTest):
         head_of_bar_after_checkout = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
         self.assertNotEqual(head_of_bar, head_of_bar_after_checkout)
-
-
-class TestGitOpt(BaseTest):
-
-    def test_to_args(self):
-        cases = (
-                (['-C', 'a', '-C', 'b'], None),
-                (['-c', 'a=b', '-C', 'b'], ['-C', 'b', '-c', 'a=b', ]),
-                (['--exec-path=/d'], None),
-                (['-p'], ['-p']),
-                (['--paginate'], ['-p']),
-                (['--no-pager'], None),
-                (['--no-pager', '-p'], ['-p']),
-                (['--no-replace-objects'], None),
-                (['--bare'], None),
-                (['--git-dir=a'], None),
-                (['--work-tree=a'], None),
-                (['--namespace=a'], None),
-                (['--super-prefix=a'], None),
-        )
-        for inp, want in cases:
-            if want is None:
-                want = inp[:]
-
-            dd(inp)
-            dd(want)
-
-            o = GitOpt().parse_args(inp[:])
-            rst = o.to_args()
-            self.assertEqual(want, rst)
 
 
 def force_remove(fn):
