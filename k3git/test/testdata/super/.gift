@@ -1,0 +1,6 @@
+dirs:
+    foo/bar: ../bargit@master
+    foo/wow: ../wowgit@master
+
+
+# vim: ft=yaml

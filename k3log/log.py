@@ -53,9 +53,10 @@ class FixedWatchedFileHandler(logging.FileHandler):
     Schroeder.
     """
 
-    def __init__(self, filename, mode='a', encoding=None, delay=0):
+    def __init__(self, filename, mode='a', encoding=None, delay=0, tag=None):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
         self.dev, self.ino = -1, -1
+        self.tag = tag
         self._statstream()
 
     def _statstream(self):
@@ -184,22 +185,24 @@ def make_logger(base_dir=None, log_name=None, log_fn=None,
     if base_dir is None:
         base_dir = k3confloader.conf.log_dir
 
-    # do not add 2 handlers to one logger by default
-    if len(logger.handlers) == 0:
+    if log_fn is None:
+        if log_name is None:
+            log_fn = get_root_log_fn()
+        else:
+            log_fn = log_name + '.' + log_suffix
 
-        if log_fn is None:
-            if log_name is None:
-                log_fn = get_root_log_fn()
-            else:
-                log_fn = log_name + '.' + log_suffix
+    #  # do not add 2 handlers to one logger by default
+    for h in logger.handlers:
+        if getattr(h, "tag", None) == 'root':
+            logger.handlers.remove(h)
 
-        logger.addHandler(make_file_handler(base_dir, log_fn,
-                                            fmt=fmt, datefmt=datefmt))
+    logger.addHandler(make_file_handler(base_dir, log_fn,
+                                        fmt=fmt, datefmt=datefmt, tag="root"))
 
     return logger
 
 
-def make_file_handler(base_dir=None, log_fn=None, fmt=None, datefmt=None):
+def make_file_handler(base_dir=None, log_fn=None, fmt=None, datefmt=None, tag=None):
     """
     It creates a rolling log file handler.
 
@@ -238,7 +241,7 @@ def make_file_handler(base_dir=None, log_fn=None, fmt=None, datefmt=None):
         log_fn = get_root_log_fn()
     file_path = os.path.join(base_dir, log_fn)
 
-    handler = FixedWatchedFileHandler(file_path)
+    handler = FixedWatchedFileHandler(file_path, tag=tag)
     handler.setFormatter(make_formatter(fmt=fmt, datefmt=datefmt))
 
     return handler
@@ -291,7 +294,8 @@ def add_std_handler(logger, stream=None, fmt=None, datefmt=None, level=None):
             is the log message format.
             It can be an alias name(like `default`) that can be used in
             ``get_fmt()``.
-            By default it is ``default``: ``[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s``.
+            By default it is ``default``:
+            ``[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s``.
 
         datefmt(str):
             is the format for date.
@@ -579,5 +583,5 @@ def deprecate(msg=None, fmt=None, sep=None):
     if msg is not None:
         d += ' ' + str(msg)
 
-    logger.warn(d + (sep or default_stack_sep)
-                + stack_str(offset=1, fmt=fmt, sep=sep))
+    logger.warning(d + (sep or default_stack_sep)
+                   + stack_str(offset=1, fmt=fmt, sep=sep))

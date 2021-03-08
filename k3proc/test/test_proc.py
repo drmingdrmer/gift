@@ -11,7 +11,7 @@ dd = k3ut.dd
 this_base = os.path.dirname(__file__)
 
 
-class TestProcError(unittest.TestCase):
+class TestProc(unittest.TestCase):
 
     foo_fn = '/tmp/foo'
 
@@ -39,7 +39,7 @@ class TestProcError(unittest.TestCase):
 
     def test_procerror(self):
         inp = (1, 'out', 'err', ['ls', 'a', 'b'], {"close_fds": True})
-        ex_args = (1, 'out', 'err', ['out'], ['err'],  ['ls', 'a', 'b'], {"close_fds": True})
+        ex_args = (1, 'out', 'err', ['out'], ['err'], ['ls', 'a', 'b'], {"close_fds": True})
         ex = k3proc.CalledProcessError(*inp)
 
         self.assertEqual(ex_args, (ex.returncode,
@@ -65,12 +65,11 @@ class TestProcError(unittest.TestCase):
             self.assertEqual('', e.stderr)
             self.assertEqual([], e.err)
 
-
     def test_error_str(self):
 
         try:
             k3proc.command(
-                'python', '-c', 'import sys; sys.exit(1)',
+                'python', '-c', 'import sys, os; os.write(1, b"foo"); os.write(2, b"bar"); sys.exit(1)',
                 check=True,
                 env={"foo": "bar"},
                 cwd="/tmp",
@@ -78,9 +77,34 @@ class TestProcError(unittest.TestCase):
         except k3proc.CalledProcessError as e:
             s = '\n'.join([
                 "CalledProcessError",
-                'python -c import sys; sys.exit(1)',
+                'python -c import sys, os; os.write(1, b"foo"); os.write(2, b"bar"); sys.exit(1)',
                 "options: {'cwd': '/tmp', 'env': {'foo': 'bar'}, 'input': '123'}",
-                "exit code: 1"
+                "exit code: 1",
+                "foo",
+                "bar",
+
+            ])
+            self.assertEqual(s, str(e))
+            self.assertEqual(s, repr(e))
+
+        #  text=False
+        try:
+            k3proc.command(
+                'python', '-c', 'import sys, os; os.write(1, b"\x01"); os.write(2, b"\x02"); sys.exit(1)',
+                check=True,
+                env={"foo": "bar"},
+                cwd="/tmp",
+                text=False,
+                input=b"123")
+        except k3proc.CalledProcessError as e:
+            s = '\n'.join([
+                "CalledProcessError",
+                'python -c import sys, os; os.write(1, b"\x01"); os.write(2, b"\x02"); sys.exit(1)',
+                "options: {'cwd': '/tmp', 'env': {'foo': 'bar'}, 'input': b'123'}",
+                "exit code: 1",
+                "b'\\x01'",
+                "b'\\x02'",
+
             ])
             self.assertEqual(s, str(e))
             self.assertEqual(s, repr(e))
@@ -121,6 +145,25 @@ class TestProcError(unittest.TestCase):
         self.assertEqual('out-1\nout-2\n', out)
         self.assertEqual('err-1\nerr-2\n', err)
 
+    def test_text_true(self):
+
+        cmd = ['python', '-c', 'import os; os.write(1, b"\\x89")', ]
+
+        self.assertRaises(
+            UnicodeDecodeError,
+            k3proc.command,
+            *cmd
+        )
+
+        returncode, out, err = k3proc.command(*cmd, text=False)
+
+        dd('returncode:', returncode)
+        dd('out:', out)
+        dd('err:', err)
+
+        self.assertEqual(0, returncode)
+        self.assertEqual(b'\x89', out)
+
     def test_close_fds(self):
 
         read_fd = os.path.join(this_base, 'read_fd.py')
@@ -160,8 +203,8 @@ class TestProcError(unittest.TestCase):
 
     def test_env(self):
         returncode, out, err = k3proc.command('python', 'print_env.py', 'abc',
-                                                  env={"abc": "xyz"},
-                                                  cwd=this_base)
+                                              env={"abc": "xyz"},
+                                              cwd=this_base)
         dd('returncode:', returncode)
         dd('out:', out)
         dd('err:', err)
@@ -186,8 +229,8 @@ class TestProcError(unittest.TestCase):
     def test_input(self):
 
         returncode, out, err = k3proc.command('python', 'read_fd.py', '0',
-                                                  input='abc',
-                                                  cwd=this_base)
+                                              input='abc',
+                                              cwd=this_base)
         dd('returncode:', returncode)
         dd('out:', out)
         dd('err:', err)
@@ -202,6 +245,17 @@ class TestProcError(unittest.TestCase):
                               k3proc.command, 'python', '-c',
                               'import time; time.sleep(1)',
                               timeout=0.1
+                              )
+            self.assertLess(t.spent(), 1)
+
+    def test_timeout_tty(self):
+
+        with k3ut.Timer() as t:
+            self.assertRaises(k3proc.TimeoutExpired,
+                              k3proc.command, 'python', '-c',
+                              'import time; time.sleep(1)',
+                              timeout=0.1,
+                              tty=True,
                               )
             self.assertLess(t.spent(), 1)
 

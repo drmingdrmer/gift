@@ -1,6 +1,7 @@
+import k3log
 # make a file logger in one line
-logger = pk3logutil.make_logger('/tmp', level='INFO', fmt='%(message)s',
-                                datefmt="%H:%M:%S")
+logger = k3log.make_logger('/tmp', level='INFO', fmt='%(message)s',
+                           datefmt="%H:%M:%S")
 logger.info('foo')
 
 logger.stack_str(fmt="{fn}:{ln} in {func}\n  {statement}", sep="\n")
@@ -10,5 +11,5 @@ logger.stack_str(fmt="{fn}:{ln} in {func}\n  {statement}", sep="\n")
 #   exec code in run_globals
 # ...
 # test_logutil.py:82 in test_deprecate
-#   pk3logutil.deprecate()
+#   k3log.deprecate()
 #   'foo', fmt='{fn}:{ln} in {func}\n  {statement}', sep='\n')

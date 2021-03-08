@@ -11,11 +11,13 @@ To parse a git command ``git --git-dir=/foo fetch origin``:
 
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __name__ = "k3git"
 
 from .gitopt import GitOpt
+from .git_wrapper import Git
 
 __all__ = [
+    'Git',
     'GitOpt',
 ]

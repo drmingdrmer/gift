@@ -1,12 +1,17 @@
 # k3log
 
 [![Build Status](https://travis-ci.com/pykit3/k3log.svg?branch=master)](https://travis-ci.com/pykit3/k3log)
+![Python package](https://github.com/pykit3/k3log/workflows/Python%20package/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/k3log/badge/?version=stable)](https://k3log.readthedocs.io/en/stable/?badge=stable)
 [![Package](https://img.shields.io/pypi/pyversions/k3log)](https://pypi.org/project/k3log)
 
 k3log is a collection of log utilities.
 
 k3log is a component of [pykit3] project: a python3 toolkit set.
+
+
+k3log is a collection of log utilities for logging.
+
 
 
 # Install

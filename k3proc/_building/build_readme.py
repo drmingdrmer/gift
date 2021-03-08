@@ -1,20 +1,27 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
-import imp
-import yaml
-import jinja2
 import doctest
+import imp
+import os
+import sys
+
+import jinja2
+import yaml
 
 # xxx/_building/build_readme.py
 this_base = os.path.dirname(__file__)
 
 j2vars = {}
 
+# let it be able to find indirectly dependent package locally
+# e.g.: `k3fs` depends on `k3confloader`
+sys.path.insert(0, os.path.abspath('..'))
+
 # load package name from __init__.py
 pkg = imp.load_source("_foo", '__init__.py')
-j2vars["name"] = pkg._name
+j2vars["name"] = pkg.__name__
+
 
 def get_gh_config():
     with open('.github/settings.yml', 'r') as f:
@@ -25,6 +32,7 @@ def get_gh_config():
     tags = [x.strip() for x in tags]
     cfg['repository']['topics'] = tags
     return cfg
+
 
 cfg = get_gh_config()
 j2vars['description'] = cfg['repository']['description']
@@ -39,9 +47,24 @@ def get_examples(pkg):
         rst.append('>>> ' + e.source.strip())
         rst.append(e.want.strip())
 
-    return '\n'.join(rst)
+    rst = '\n'.join(rst)
+
+    for fn in ("synopsis.txt",
+               "synopsis.py",
+               ):
+        try:
+            with open(fn, 'r') as f:
+                rst += '\n' + f.read()
+
+        except FileNotFoundError:
+            pass
+
+    return rst
+
 
 j2vars['synopsis'] = get_examples(pkg)
+j2vars['package_doc'] = pkg.__doc__
+
 
 def render_j2(tmpl_path, tmpl_vars, output_path):
     template_loader = jinja2.FileSystemLoader(searchpath='./')
@@ -54,7 +77,8 @@ def render_j2(tmpl_path, tmpl_vars, output_path):
     with open(output_path, 'w') as f:
         f.write(txt)
 
+
 if __name__ == "__main__":
     render_j2('_building/README.md.j2',
-       j2vars,
-       'README.md')
+              j2vars,
+              'README.md')
