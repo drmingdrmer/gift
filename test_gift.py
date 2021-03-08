@@ -17,8 +17,8 @@ from k3handy import cmd0
 from k3handy import cmdout
 from k3handy import cmdtty
 from k3handy import cmdx
-from k3handy import pjoin
 from k3handy import dd
+from k3handy import pjoin
 
 gift = imp.load_source('gift', './gift')
 
@@ -44,6 +44,10 @@ barp = pjoin(this_base, "testdata", "bar")
 
 execpath = cmd0(origit, '--exec-path')
 
+ident_args = [
+        '-c', 'user.name=fooUser',
+        '-c', 'user.email=my@email.org',
+]
 
 def _clean_case():
     for d in ("empty", ):
@@ -71,7 +75,7 @@ class BaseTest(unittest.TestCase):
         # .git can not be track in a git repo.
         # need to manually create it.
         fwrite(pjoin(this_base, "testdata", "super", ".git"),
-                   "gitdir: ../supergit")
+               "gitdir: ../supergit")
 
     def tearDown(self):
         if os.environ.get("GIFT_NOCLEAN", None) == "1":
@@ -83,16 +87,18 @@ class BaseTest(unittest.TestCase):
         cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subwowp)
 
     def _check_initial_superhead(self):
-        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        _, out, _ = cmdx(giftp, "rev-parse",
+                         "refs/remotes/super/head", cwd=subbarp)
         self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", out[0])
 
-        _, out, _ = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subwowp)
+        _, out, _ = cmdx(giftp, "rev-parse",
+                         "refs/remotes/super/head", cwd=subwowp)
         self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", out[0])
 
     def _add_file_to_subbar(self):
         fwrite(pjoin(subbarp, "newbar"), "newbar")
         cmdx(giftp, "add", "newbar", cwd=subbarp)
-        cmdx(giftp, "commit", "-m", "add newbar", cwd=subbarp)
+        cmdx(giftp, *ident_args, "commit", "-m", "add newbar", cwd=subbarp)
 
         # TODO test no .gift file
 
@@ -101,141 +107,15 @@ class BaseTest(unittest.TestCase):
         self.assertEqual(lines, out)
 
     def _nofile(self, *ps):
-        self.assertFalse(os.path.isfile(pjoin(*ps)), "no file in " + pjoin(*ps))
+        self.assertFalse(os.path.isfile(pjoin(*ps)),
+                         "no file in " + pjoin(*ps))
 
     def _fcontent(self, txt, *ps):
-        self.assertTrue(os.path.isfile(pjoin(*ps)), pjoin(*ps) + " should exist")
+        self.assertTrue(os.path.isfile(pjoin(*ps)),
+                        pjoin(*ps) + " should exist")
 
         actual = fread(pjoin(*ps))
         self.assertEqual(txt, actual, "check file content")
-
-
-class TestGit(BaseTest):
-
-    def test_rev_of(self):
-        # TODO
-        g = Git(GitOpt(), cwd=superp)
-        t = g.rev_of("abc")
-        self.assertIsNone(t)
-
-        t = g.rev_of("master")
-        self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
-
-        t = g.rev_of("refs/heads/master")
-        self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
-
-        t = g.rev_of("c3954c897dfe40a5b99b7145820eeb227210265c")
-        self.assertEqual("c3954c897dfe40a5b99b7145820eeb227210265c", t)
-
-    def test_remote_get(self):
-        # TODO
-        g = Git(GitOpt(), cwd=superp)
-        t = g.remote_get("abc")
-        self.assertIsNone(t)
-
-        cmdx(origit, "remote", "add", "newremote", "newremote-url", cwd=superp)
-        t = g.remote_get("newremote")
-        self.assertEqual("newremote-url", t)
-
-    def test_remote_add(self):
-        # TODO
-        g = Git(GitOpt(), cwd=superp)
-        t = g.remote_get("abc")
-        self.assertIsNone(t)
-
-        g.remote_add("newremote", "newremote-url")
-        t = g.remote_get("newremote")
-        self.assertEqual("newremote-url", t)
-
-    def test_blob_new(self):
-        fwrite(pjoin(superp, "newblob"), "newblob!!!")
-        # TODO
-        g = Git(GitOpt(), cwd=superp)
-        blobhash = g.blob_new("newblob")
-
-        content = cmd0(origit, "cat-file", "-p", blobhash, cwd=superp)
-        self.assertEqual("newblob!!!", content)
-
-    def test_add_tree(self):
-
-        # TODO opt
-        g = Git(GitOpt(), cwd=superp)
-
-        roottreeish = g.tree_of("HEAD")
-
-        dd(cmdx(origit, "ls-tree", "87486e2d4543eb0dd99c1064cc87abdf399cde9f", cwd=superp))
-        self.assertEqual("87486e2d4543eb0dd99c1064cc87abdf399cde9f", roottreeish)
-
-        # shallow add
-
-        newtree = g.tree_add_obj(roottreeish, "nested", roottreeish)
-
-        files = cmdout(origit, "ls-tree", "-r", "--name-only", newtree, cwd=superp)
-        self.assertEqual([
-            ".gift",
-            "imsuperman",
-            "nested/.gift",
-            "nested/imsuperman",
-        ], files)
-
-        # add nested
-
-        newtree = g.tree_add_obj(newtree, "a/b/c/d", roottreeish)
-
-        files = cmdout(origit, "ls-tree", "-r", "--name-only", newtree, cwd=superp)
-        self.assertEqual([
-            ".gift",
-            "a/b/c/d/.gift",
-            "a/b/c/d/imsuperman",
-            "imsuperman",
-            "nested/.gift",
-            "nested/imsuperman",
-        ], files)
-
-        # replace nested
-
-        newtree = g.tree_add_obj(newtree, "a/b/c", roottreeish)
-
-        files = cmdout(origit, "ls-tree", "-r", "--name-only", newtree, cwd=superp)
-        self.assertEqual([
-            ".gift",
-            "a/b/c/.gift",
-            "a/b/c/imsuperman",
-            "imsuperman",
-            "nested/.gift",
-            "nested/imsuperman",
-        ], files)
-
-        # replace a blob with tree
-
-        newtree = g.tree_add_obj(newtree, "a/b/c/imsuperman", roottreeish)
-
-        files = cmdout(origit, "ls-tree", "-r", "--name-only", newtree, cwd=superp)
-        self.assertEqual([
-            ".gift",
-            "a/b/c/.gift",
-            "a/b/c/imsuperman/.gift",
-            "a/b/c/imsuperman/imsuperman",
-            "imsuperman",
-            "nested/.gift",
-            "nested/imsuperman",
-        ], files)
-
-        # replace a blob in mid of path with tree
-
-        newtree = g.tree_add_obj(newtree, "nested/imsuperman/b/c", roottreeish)
-
-        files = cmdout(origit, "ls-tree", "-r", "--name-only", newtree, cwd=superp)
-        self.assertEqual([
-            ".gift",
-            "a/b/c/.gift",
-            "a/b/c/imsuperman/.gift",
-            "a/b/c/imsuperman/imsuperman",
-            "imsuperman",
-            "nested/.gift",
-            "nested/imsuperman/b/c/.gift",
-            "nested/imsuperman/b/c/imsuperman",
-        ], files)
 
 
 class TestGiftAPI(BaseTest):
@@ -295,7 +175,8 @@ class TestGiftPartialInit(BaseTest):
     def test_init_2_with_remote(self):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
-        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'],
+             self.sb['upstream']['url'], env=self.sb['bareenv'])
 
         cmdx(giftp, "init", "--sub", cwd=superp)
         self._fcontent("bar\n", subbarp, "bar")
@@ -303,8 +184,10 @@ class TestGiftPartialInit(BaseTest):
     def test_init_3_with_fetched(self):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
-        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
-        cmdx(origit, "fetch", self.sb['upstream']['name'], env=self.sb['bareenv'], cwd=superp)
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'],
+             self.sb['upstream']['url'], env=self.sb['bareenv'])
+        cmdx(origit, "fetch", self.sb['upstream']
+             ['name'], env=self.sb['bareenv'], cwd=superp)
 
         cmdx(giftp, "init", "--sub", cwd=superp)
         self._fcontent("bar\n", subbarp, "bar")
@@ -312,11 +195,14 @@ class TestGiftPartialInit(BaseTest):
     def test_init_4_already_checkout(self):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
-        cmdx(origit, "remote", "add", self.sb['upstream']['name'], self.sb['upstream']['url'], env=self.sb['bareenv'])
-        cmdx(origit, "fetch", self.sb['upstream']['name'], env=self.sb['bareenv'], cwd=superp)
+        cmdx(origit, "remote", "add", self.sb['upstream']['name'],
+             self.sb['upstream']['url'], env=self.sb['bareenv'])
+        cmdx(origit, "fetch", self.sb['upstream']
+             ['name'], env=self.sb['bareenv'], cwd=superp)
 
         os.makedirs(self.sb['env']['GIT_WORK_TREE'], mode=0o755)
-        cmdx(origit, "checkout", self.sb['upstream']['branch'], env=self.sb['env'])
+        cmdx(origit, "checkout",
+             self.sb['upstream']['branch'], env=self.sb['env'])
         self._fcontent("bar\n", subbarp, "bar")
 
         os.unlink(pjoin(subbarp, "bar"))
@@ -335,7 +221,8 @@ class TestGiftDelegate(BaseTest):
 
     def test_opt_help(self):
         out = cmdout(giftp, "--help", cwd=superp)
-        self.assertIn('These are common Git commands used in various situations:', out)
+        self.assertIn(
+            'These are common Git commands used in various situations:', out)
         self.assertIn('Gift extended command:', out)
         self.assertIn('gift clone --sub <url>@<branch> <dir>', out)
 
@@ -371,7 +258,8 @@ class TestGiftDelegate(BaseTest):
         rst = cmd0(giftp, "--exec-path=" + execpath, "--exec-path")
         self.assertEqual(execpath, rst)
 
-        out = cmdout(giftp, "--exec-path=/foo/", "-p", "gift-debug", cwd=superp)
+        out = cmdout(giftp, "--exec-path=/foo/",
+                     "-p", "gift-debug", cwd=superp)
         self.assertEqual([
 
             'gift-debug',
@@ -395,7 +283,8 @@ class TestGiftDelegate(BaseTest):
         ], out)
 
     def test_opt_minus_c(self):
-        code, out, err = cmdtty(giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
+        code, out, err = cmdtty(
+            giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=superp)
         self.assertEqual(0, code)
         self.assertEqual([
             'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
@@ -404,7 +293,8 @@ class TestGiftDelegate(BaseTest):
 
     def test_opt_git_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            out = cmdout(giftp, '--git-dir=' + supergitp, "log", "-n1", cwd=tmpdir)
+            out = cmdout(giftp, '--git-dir=' + supergitp,
+                         "log", "-n1", cwd=tmpdir)
 
         self.assertEqual([
             'commit c3954c897dfe40a5b99b7145820eeb227210265c',
@@ -460,7 +350,8 @@ class TestGiftDelegate(BaseTest):
 
         self.assertEqual(1, e.returncode)
         self.assertEqual([], e.out)
-        self.assertEqual("git: 'abc' is not a git command. See 'git --help'.", e.err[0])
+        self.assertEqual(
+            "git: 'abc' is not a git command. See 'git --help'.", e.err[0])
 
         # there should not raw python error returned
         self.assertNotIn('Traceback', "".join(e.out))
@@ -484,7 +375,8 @@ class TestGiftDelegate(BaseTest):
 
     def test_cmd_tty(self):
         # TODO this test does not belongs to gift
-        code, out, err = cmdtty(origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+        code, out, err = cmdtty(
+            origit, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
 
         self.assertEqual(0, code)
         # on ci: the output lack of: '\x1b[?1h\x1b=\r'
@@ -504,7 +396,8 @@ class TestGiftDelegate(BaseTest):
         ], err)
 
     def test_interactive_mode(self):
-        _, out, err = cmdtty(giftp, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
+        _, out, err = cmdtty(
+            giftp, "log", "-n1", "c3954c897dfe40a5b99b7145820eeb227210265c", cwd=superp)
 
         # self.assertEqual([
         #         '\x1b[?1h\x1b=\r\x1b[33mcommit c3954c897dfe40a5b99b7145820eeb227210265c\x1b[m\x1b[33m (\x1b[m\x1b[1;36mHEAD -> \x1b[m\x1b[1;32mmaster\x1b[m\x1b[33m)\x1b[m\x1b[m\r',
@@ -532,7 +425,8 @@ class TestGift(BaseTest):
         except CalledProcessError as e:
             self.assertEqual(2, e.returncode)
             self.assertEqual([], e.out)
-            self.assertEqual(["--sub can not be used in git-dir:" + supergitp], e.err)
+            self.assertEqual(
+                ["--sub can not be used in git-dir:" + supergitp], e.err)
 
         try:
             cmdx(giftp, "status", cwd=supergitp)
@@ -579,13 +473,15 @@ class TestGift(BaseTest):
 
     def test_clone_sub(self):
         cmdx(giftp, "init", cwd=emptyp)
-        code, out, err = cmdx(giftp, "clone", "--sub", "../bargit@master", "path/to/bar", cwd=emptyp)
+        code, out, err = cmdx(giftp, *ident_args,  "clone", "--sub",
+                              "../bargit@master", "path/to/bar", cwd=emptyp)
         for l in (
                 'GIFT: path/to/bar: add remote: origin ../bargit',
                 'GIFT: path/to/bar: fetch origin ../bargit',
                 "From ../bargit",
         ):
-            self.assertIn(l, "\n".join(err), "it should output fetching status")
+            self.assertIn(l, "\n".join(err),
+                          "it should output fetching status")
 
         self._gitoutput([giftp, "ls-files"], [
             ".gift",
@@ -593,7 +489,8 @@ class TestGift(BaseTest):
             "path/to/bar/bar",
         ], cwd=emptyp)
 
-        self._fcontent("dirs:\n  path/to/bar: ../bargit@master\n", emptyp, ".gift")
+        self._fcontent(
+            "dirs:\n  path/to/bar: ../bargit@master\n", emptyp, ".gift")
         self._fcontent("\n".join([
             "- - path/to/bar",
             "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
@@ -611,14 +508,17 @@ class TestGift(BaseTest):
             self._fcontent("bar\n", subbarp, "bar")
             self._fcontent("wow\n", subwowp, "wow")
 
-            self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
-            self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subwowp)
-            self._gitoutput([giftp, "ls-files"], [".gift", "imsuperman"], cwd=superp)
+            self._gitoutput([giftp, "symbolic-ref", "--short",
+                             "HEAD"], ["master"], cwd=subbarp)
+            self._gitoutput([giftp, "symbolic-ref", "--short",
+                             "HEAD"], ["master"], cwd=subwowp)
+            self._gitoutput([giftp, "ls-files"],
+                            [".gift", "imsuperman"], cwd=superp)
 
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         cmdx(giftp, "add", "foo", cwd=superp)
-        cmdx(giftp, "commit", "-m", "add foo", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "add foo", cwd=superp)
 
         self._gitoutput([giftp, "ls-files"],
                         [
@@ -631,7 +531,7 @@ class TestGift(BaseTest):
 
     def test_commit_sub(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
-        _, out, err = cmdx(giftp, "commit", "--sub", cwd=superp)
+        _, out, err = cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
         dd(out)
         dd(err)
 
@@ -671,7 +571,7 @@ class TestGift(BaseTest):
     def test_merge_sub(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
-        cmdx(giftp, "commit", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
 
         headhash = self._add_commit_to_bar_from_other_clone()
 
@@ -681,12 +581,13 @@ class TestGift(BaseTest):
         cmdx(giftp, "merge", "--sub", cwd=superp)
         fetched_hash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
 
-        self.assertEqual(headhash, fetched_hash, "HEAD is updated to latest master")
+        self.assertEqual(headhash, fetched_hash,
+                         "HEAD is updated to latest master")
 
     def test_reset_sub(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
-        cmdx(giftp, "commit", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
 
         ori_hash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
 
@@ -698,18 +599,20 @@ class TestGift(BaseTest):
         cmdx(giftp, "merge", "origin/master", cwd=subbarp)
         fetched_hash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
 
-        self.assertEqual(headhash, fetched_hash, "HEAD is updated to latest master")
+        self.assertEqual(headhash, fetched_hash,
+                         "HEAD is updated to latest master")
 
         cmdx(giftp, "reset", "--sub", cwd=superp)
         reset_hash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
-        self.assertEqual(ori_hash, reset_hash, "HEAD is reset to original master")
+        self.assertEqual(ori_hash, reset_hash,
+                         "HEAD is reset to original master")
 
     def _add_commit_to_bar_from_other_clone(self):
         cmdx(origit, "clone", bargitp, barp)
 
         fwrite(pjoin(barp, "for_fetch"), "for_fetch")
         cmdx(origit, "add", "for_fetch", cwd=barp)
-        cmdx(origit, "commit", "-m", "add for_fetch", cwd=barp)
+        cmdx(origit, *ident_args, "commit", "-m", "add for_fetch", cwd=barp)
         cmdx(origit, "push", "origin", "master", cwd=barp)
 
         headhash = cmd0(origit, "rev-parse", "HEAD", cwd=barp)
@@ -723,22 +626,25 @@ class TestGift(BaseTest):
         dd(superhash)
 
         gift_super_hash = cmd0(giftp, "rev-parse", "HEAD", cwd=superp)
-        self.assertEqual(superhash, gift_super_hash, "gift should get the right super HEAD hash")
+        self.assertEqual(superhash, gift_super_hash,
+                         "gift should get the right super HEAD hash")
 
         barhash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
-        self.assertNotEqual(barhash, superhash, "gift should get a different hash in sub dir bar")
+        self.assertNotEqual(barhash, superhash,
+                            "gift should get a different hash in sub dir bar")
 
         self._add_file_to_subbar()
 
         superhash2 = cmd0(origit, "rev-parse", "HEAD", cwd=superp)
-        self.assertEqual(superhash, superhash2, "commit in sub dir should not change super dir HEAD")
+        self.assertEqual(superhash, superhash2,
+                         "commit in sub dir should not change super dir HEAD")
 
     def test_populate_super_ref(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
 
         # commit --sub should populate super/head
-        cmdx(giftp, "commit", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
         self._check_initial_superhead()
 
         self._add_file_to_subbar()
@@ -753,17 +659,19 @@ class TestGift(BaseTest):
         cmdx(giftp, "init", "--sub", cwd=superp)
 
         # commit --sub should populate super/head
-        cmdx(giftp, "commit", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
         self._check_initial_superhead()
 
-        head_of_bar = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        head_of_bar = cmdx(giftp, "rev-parse",
+                           "refs/remotes/super/head", cwd=subbarp)
 
         state0 = fread(pjoin(superp, ".gift-refs"))
 
         self._add_file_to_subbar()
-        cmdx(giftp, "commit", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
 
-        head1 = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        head1 = cmdx(giftp, "rev-parse",
+                     "refs/remotes/super/head", cwd=subbarp)
         self.assertNotEqual(head_of_bar, head1)
 
         state1 = fread(pjoin(superp, ".gift-refs"))
@@ -771,24 +679,28 @@ class TestGift(BaseTest):
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo
         cmdx(giftp, "reset", "HEAD~", cwd=superp)
-        head2 = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        head2 = cmdx(giftp, "rev-parse",
+                     "refs/remotes/super/head", cwd=subbarp)
         self.assertNotEqual(head_of_bar, head2)
 
     def test_super_checkout_should_populate_super_ref(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
-        cmdx(giftp, "commit", "--sub", cwd=superp)
-        head_of_bar = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        head_of_bar = cmdx(giftp, "rev-parse",
+                           "refs/remotes/super/head", cwd=subbarp)
 
         self._add_file_to_subbar()
-        cmdx(giftp, "commit", "--sub", cwd=superp)
-        head_of_bar1 = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        head_of_bar1 = cmdx(giftp, "rev-parse",
+                            "refs/remotes/super/head", cwd=subbarp)
 
         self.assertNotEqual(head_of_bar, head_of_bar1)
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo
         cmdx(giftp, "checkout", "HEAD~", cwd=superp)
-        head_of_bar_after_checkout = cmdx(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        head_of_bar_after_checkout = cmdx(
+            giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
         self.assertNotEqual(head_of_bar, head_of_bar_after_checkout)
 

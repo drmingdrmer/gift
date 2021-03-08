@@ -14,6 +14,7 @@ import k3proc
 from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
+from k3git import Git
 from k3handy import cmd0
 from k3handy import cmdf
 from k3handy import cmdpass
@@ -191,7 +192,7 @@ class Gift(object):
                 gitpath=self.gitpath,
                 gitdir=git_dir,
                 cwd=self.cwd,
-                ctxmsg=sb['dir'],
+                ctxmsg='GIFT: ' + sb['dir'],
             )
         else:
             return Git(
@@ -200,7 +201,7 @@ class Gift(object):
                 gitdir=git_dir,
                 working_dir=working_dir,
                 cwd=self.cwd,
-                ctxmsg=sb['dir'],
+                ctxmsg='GIFT: ' + sb['dir'],
             )
 
     def check_worktree(self, sb):
@@ -274,9 +275,9 @@ class Gift(object):
         cmd = cmds[0]
         if cmd == '--version':
             display(1, "gift version " + version)
-            self._g().cmdpass('--version')
+            self._g().cmdf('--version', flag='xp')
         elif cmd == '--help':
-            self._g().cmdpass('--help')
+            self._g().cmdf('--help', flag='xp')
             lines = [
                 "",
                 "Gift extended command:",
@@ -296,7 +297,7 @@ class Gift(object):
                      '--info-path',
                      '--html-path',
                      ):
-            self._g().cmdpass(cmd)
+            self._g().cmdf(cmd, flag='xp')
 
     def cmd(self, cmds):
 
@@ -314,7 +315,7 @@ class Gift(object):
         self.init_git_config()
 
         if self.git_dir is None:
-            self._g().cmdpass(*cmds)
+            self._g().cmdf(*cmds, flag='xp')
             return
 
         cmd, issub, cmds = self._arg_param(cmds)
@@ -325,7 +326,7 @@ class Gift(object):
             if issub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                g = self._g().cmdpass(*cmds)
+                g = self._g().cmdf(*cmds, flag='xp')
         else:
 
             subdir = self.cwd
@@ -353,10 +354,10 @@ class Gift(object):
 
             if sb is not None:
                 g = self._g(sb)
-                g.cmdpass(*cmds)
+                g.cmdf(*cmds, flag='xp')
             else:
                 g = self._g()
-                g.cmdpass(*cmds)
+                g.cmdf(*cmds, flag='xp')
                 # TODO run gift in a git-dir
 
         refs1 = self._get_head_refs()
@@ -384,7 +385,7 @@ class Gift(object):
         g = self._g()
         try:
             # TODO should not cmd0
-            cont = g.cmd0("show", "HEAD:" + refsfn)
+            cont = g.cmdf("show", "HEAD:" + refsfn, flag='x0')
         except CalledProcessError:
             return None
 
@@ -412,8 +413,8 @@ class Gift(object):
         self.init_git_config()
 
         g = self._g()
-        g.cmdx("add", self.confpath)
-        g.cmdx("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir)
+        g.cmdf("add", self.confpath, flag='x')
+        g.cmdf("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir, flag='x')
 
         self.x_init_sub([])
         self.x_commit_sub([])
@@ -435,7 +436,7 @@ class Gift(object):
     def x_commit_sub(self, cmds):
         g = self._g()
         supertree = g.tree_of("HEAD", flag='x')
-        parent = g.commit_of("HEAD")
+        parent = g.rev_of("HEAD")
         refs = []
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
@@ -451,8 +452,8 @@ class Gift(object):
         statehash = g.blob_new(statep, flag='x')
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
 
-        newcommit = g.cmd0("commit-tree", "-p", parent, supertree, input="commit subdirs")
-        g.cmdx("reset", newcommit)
+        newcommit = g.cmdf("commit-tree", "-p", parent, supertree, input="commit subdirs", flag='x0')
+        g.cmdf("reset", newcommit, flag='x')
 
         self._populate_ref(refs)
 
@@ -507,219 +508,12 @@ class Gift(object):
     def _add_sub(self, supertree, sb):
         g = self._g()
 
-        g.cmdx("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"])
+        g.cmdf("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"], flag='x')
 
         sub_tree = g.tree_of(sb["refhead"], flag='x')
         supertree = g.tree_add_obj(supertree, sb["dir"], sub_tree)
 
-        return supertree, g.commit_of(sb["refhead"])
-
-
-class Git(object):
-
-    def __init__(self, opt, gitpath=None, gitdir=None, working_dir=None, cwd=None, ctxmsg=None):
-        self.opt = opt.clone()
-        # gitdir and working_dir is specified and do not consider '-C' option
-        if gitdir is not None:
-            self.opt.opt['git_dir'] = pabs(gitdir)
-        if working_dir is not None:
-            self.opt.opt['work_tree'] = pabs(working_dir)
-
-        self.cwd = cwd
-
-        self.gitpath = gitpath or "git"
-        self.ctxmsg = ctxmsg
-
-    # high level API
-
-    def checkout(self, branch, flag='x'):
-        self.cmdf("checkout", branch, flag=flag)
-
-    def fetch(self, name, flag=''):
-        self.cmdf("fetch", name, flag=flag)
-
-    # remote
-
-    def remote_get(self, name, flag=''):
-        return self.cmdf("remote", "get-url", name, flag=flag+'n0')
-
-    def remote_add(self, name, url, flag='x', **options):
-        self.cmdf("remote", "add", name, url, **options, flag=flag)
-
-    # commit
-
-    def commit_of(self, ref, flag=''):
-        """
-        Get the hash of a commit.
-
-        Args:
-
-            ref(str): short hash, full length hash, ref name or branch.
-
-            flag(str): flag='x' to raise if return code is not 0. flag='' to return None.
-
-        Returns:
-            str: sha256 in lower-case hex.
-        """
-        return self.cmdf("rev-parse", ref, flag=flag+'n0')
-
-    # blob
-
-    def blob_new(self, f, flag=''):
-        return self.cmdf("hash-object", "-w", f, flag=flag+'n0')
-
-    #  tree
-
-    def tree_of(self, commit, flag=''):
-        return self.cmdf("rev-parse", commit + "^{tree}", flag=flag+'n0')
-
-    def tree_items(self, treeish, name_only=False, flag='x'):
-        args = []
-        if name_only:
-            args.append("--name-only")
-        return self.cmdf("ls-tree", treeish, *args, flag=flag+'no')
-
-    def tree_add_obj(self, cur_tree, path, treeish):
-
-        sep = os.path.sep
-
-        itms = self.tree_items(cur_tree)
-
-        if sep not in path:
-            return self.tree_new(itms, path, treeish, flag='x')
-
-        # a/b/c -> a, b/c
-        p0, left = path.split(sep, 1)
-        p0item = self.tree_find_item(cur_tree, fn=p0, typ="tree")
-
-        if p0item is None:
-
-            newsubtree = treeish
-            for p in reversed(left.split(sep)):
-                newsubtree = self.tree_new([], p, newsubtree, flag='x')
-        else:
-
-            subtree = p0item["object"]
-            newsubtree = self.tree_add_obj(subtree, left, treeish)
-
-        return self.tree_new(itms, p0, newsubtree, flag='x')
-
-    def tree_find_item(self, treeish, fn=None, typ=None):
-        for itm in self.tree_items(treeish):
-            itm = self.parse_tree_item(itm)
-            if fn is not None and itm["fn"] != fn:
-                continue
-            if typ is not None and itm["type"] != typ:
-                continue
-
-            return itm
-        return None
-
-    def parse_tree_item(self, line):
-
-        # git-ls-tree output:
-        #     <mode> SP <type> SP <object> TAB <file>
-        # This output format is compatible with what --index-info --stdin of git update-index expects.
-        # When the -l option is used, format changes to
-        #     <mode> SP <type> SP <object> SP <object size> TAB <file>
-        # E.g.:
-        # 100644 blob a668431ae444a5b68953dc61b4b3c30e066535a2    imsuperman
-        # 040000 tree a668431ae444a5b68953dc61b4b3c30e066535a2    foo
-
-        p, fn = line.split("\t", 1)
-
-        elts = p.split(" ")
-        rst = {
-            "mode": elts[0],
-            "type": elts[1],
-            "object": elts[2],
-            "fn": fn,
-        }
-        if len(elts) == 4:
-            rst["size"] = elts[3]
-
-        return rst
-
-    def tree_new(self, itms, name, obj, flag=''):
-
-        typ = self.obj_type(obj, flag='x')
-        item_fmt = "{mode} {typ} {object}\t{name}"
-
-        newitems = [x for x in itms
-                    if self.parse_tree_item(x)["fn"] != name]
-
-        # add a new item
-        if typ == 'tree':
-            mode = "040000"
-        else:
-            mode = "100644"
-        itm = item_fmt.format(mode=mode,
-                              typ=typ,
-                              object=obj,
-                              name=name
-                              )
-        newitems.append(itm)
-        new_treeish = self.cmdf("mktree", input="\n".join(newitems), flag=flag+'n0')
-        return new_treeish
-
-    # rev
-
-    def rev_of(self, name, flag=''):
-        """
-        Get the revision(sha256) of an object.
-
-        Args:
-
-            name(str): could be short hash, full length hash, ref name or branch.
-
-            flag(str): flag='x' to raise if return code is not 0. flag='' to return None.
-
-        Returns:
-            str: sha256 in lower-case hex. If no such object is found, it returns None.
-        """
-        return self.cmdf("rev-parse", "--verify", "--quiet", name, flag=flag+'n0')
-
-
-    def obj_type(self, obj, flag=''):
-        return self.cmdf("cat-file", "-t", obj, flag=flag+'n0')
-
-    # wrapper of cli
-
-    def _opt(self, **kwargs):
-        opt = {}
-        if self.cwd is not None:
-            opt["cwd"] = self.cwd
-        opt.update(kwargs)
-        return opt
-
-    def _args(self):
-        return self.opt.to_args()
-
-
-    def cmdf(self, *args, flag='', **kwargs):
-        return cmdf(self.gitpath, *self._args(), *args, flag=flag, **self._opt(**kwargs))
-
-    def cmd0(self, *args, **kwargs):
-        return self.cmdf(*args, **kwargs, flag='x0')
-
-    def cmdx(self, *args, **kwargs):
-        return self.cmdf(*args, **kwargs, flag='x')
-
-    def cmdpass(self, *args, **kwargs):
-        return self.cmdf(*args, **kwargs, flag='xp')
-
-    def out(self, fd, *msg):
-        #  TODO not used?
-
-        os.write(fd, b"GIFT: ")
-
-        if self.ctxmsg is not None:
-            os.write(fd, to_utf8(self.ctxmsg) + b": ")
-
-        for m in msg:
-            os.write(fd, to_utf8(m))
-            os.write(fd, b" ")
-        os.write(fd, b"\n")
+        return supertree, g.rev_of(sb["refhead"])
 
 
 def git_args():
