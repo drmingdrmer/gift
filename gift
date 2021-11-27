@@ -243,7 +243,15 @@ class Gift(object):
         g = self._g(sb)
         if g.rev_of("HEAD") is None:
             dd("HEAD not found:")
-            g.checkout(sb['upstream']["branch"])
+
+            up = sb['upstream']
+
+            code, out, err = g.checkout(up["branch"], flag='')
+            if code == 0:
+                pass
+            else:
+                display(out, err)
+                g.reset_to_commit('soft', up['name'] + '/' + up['branch'])
 
     def get_subrepo_config(self, subdir):
 

@@ -1,0 +1,11 @@
+0000000000000000000000000000000000000000 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1622911132 +0800	commit (initial): a
+3d7f4245f05db036309e9f74430d5479263637ad 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1622955305 +0800	checkout: moving from master to dev
+3d7f4245f05db036309e9f74430d5479263637ad 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1622955312 +0800	checkout: moving from dev to master
+3d7f4245f05db036309e9f74430d5479263637ad 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1636889929 +0800	checkout: moving from master to base
+3d7f4245f05db036309e9f74430d5479263637ad d1ec6549cffc507a2d41d5e363dcbd23754377c7 drdr xp <drdr.xp@gmail.com> 1636889942 +0800	commit: add base
+d1ec6549cffc507a2d41d5e363dcbd23754377c7 d1ec6549cffc507a2d41d5e363dcbd23754377c7 drdr xp <drdr.xp@gmail.com> 1636889959 +0800	checkout: moving from base to b2
+d1ec6549cffc507a2d41d5e363dcbd23754377c7 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1636889967 +0800	reset: moving to HEAD~
+3d7f4245f05db036309e9f74430d5479263637ad 1315e30ec849dbbe67df3282139c0e0d3fdca606 drdr xp <drdr.xp@gmail.com> 1636889981 +0800	commit: add b2
+1315e30ec849dbbe67df3282139c0e0d3fdca606 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1636890010 +0800	checkout: moving from b2 to master
+3d7f4245f05db036309e9f74430d5479263637ad 1315e30ec849dbbe67df3282139c0e0d3fdca606 drdr xp <drdr.xp@gmail.com> 1636890439 +0800	checkout: moving from master to b2
+1315e30ec849dbbe67df3282139c0e0d3fdca606 3d7f4245f05db036309e9f74430d5479263637ad drdr xp <drdr.xp@gmail.com> 1636890458 +0800	checkout: moving from b2 to master

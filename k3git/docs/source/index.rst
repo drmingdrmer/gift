@@ -25,7 +25,11 @@ Classes
 .. autoclass::  GitOpt
      :members:
 
+.. autoclass::  Git
+     :members:
 
+.. autoclass::  GitUrl
+     :members:
 
 Indices and tables
 ==================

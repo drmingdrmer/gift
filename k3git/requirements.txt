@@ -1,6 +1,7 @@
 -r _building/requirements.txt
 
 
-k3ut~=0.1.7
-k3handy~=0.1.4
-k3fs~=0.1.5
+k3str>=v0.1.1,<0.2
+k3ut>=0.1.7,<0.2
+k3handy>=0.1.4,<0.2
+k3fs>=0.1.5,<0.2

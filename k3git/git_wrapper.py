@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
 import logging
+import os
 
-
+from k3handy import cmdf
+from k3handy import pabs
 from k3str import to_utf8
-from k3handy.path import pabs
-
-from k3handy.cmd import cmdf
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +29,98 @@ class Git(object):
     # high level API
 
     def checkout(self, branch, flag='x'):
-        self.cmdf("checkout", branch, flag=flag)
+        return self.cmdf("checkout", branch, flag=flag)
 
     def fetch(self, name, flag=''):
-        self.cmdf("fetch", name, flag=flag)
+        return self.cmdf("fetch", name, flag=flag)
+
+    def reset_to_commit(self, mode, target=None, flag='x'):
+        """
+        mode is one of `soft`, `mixed`, `hard`, `merge`, `keep`.
+        """
+        if target is None:
+            target = 'HEAD'
+
+        return self.cmdf('reset', '--' + mode, target, flag=flag)
+
+    # worktree
+
+    def worktree_is_clean(self, flag=''):
+        """
+        Return whether worktree is clean
+        """
+        # git bug: 
+        # Without running 'git status' first, "diff-index" in our test does not
+        # pass
+        self.cmdf("status", flag='')
+        code, _out, _err = self.cmdf("diff-index", "--quiet", "HEAD", "--", flag=flag)
+        return code == 0
+
+    # branch
+
+    def branch_default_remote(self, branch, flag=''):
+        """
+        Returns the default remote name of a branch.
+        """
+        return self.cmdf('config', '--get',
+                         'branch.{}.remote'.format(branch),
+                         flag=flag + 'n0')
+
+    def branch_default_upstream(self, branch, flag=''):
+        """
+        Returns the default upstream name of a branch,
+        i.e., the default upstream for master is origin/master.
+        """
+        return self.cmdf('rev-parse',
+                         '--abbrev-ref',
+                         '--symbolic-full-name',
+                         branch +'@{upstream}', 
+                         flag=flag + 'n0')
+
+    def branch_set(self, branch, rev, flag='x'):
+        """
+        Set branch ref to specified ``rev``.
+        """
+
+        self.cmdf('update-ref', 'refs/heads/{}'.format(branch), rev, flag=flag)
+
+    def branch_common_base(self, branch, other, flag=''):
+        """
+        Find the common base of two branches
+        """
+
+        return self.cmdf('merge-base', branch, other, flag=flag+'0')
+
+    def branch_divergency(self, branch, upstream=None, flag=''):
+        """
+        Return the divergency between a branch and another.
+        If upstream is None, the default upstream is used.
+
+        Return: (list, list) commits from common base to branch and commits from common base to upstream.
+        """
+
+        if upstream is None:
+            upstream = self.branch_default_upstream(branch, flag='x')
+
+        base = self.branch_common_base(branch, upstream, flag='x')
+
+        b_logs = self.cmdf("log", "--format=%H", base + '..' + branch, flag='xo')
+        u_logs = self.cmdf("log", "--format=%H", base + '..' + upstream, flag='xo')
+
+        return (base, b_logs, u_logs)
+
+    # head
+
+    def head_branch(self, flag=''):
+        """
+        Returns the branch HEAD pointing to.
+        """
+        return self.cmdf('symbolic-ref', '--short', 'HEAD', flag=flag + 'n0')
 
     # remote
 
     def remote_get(self, name, flag=''):
+        # TODO: by default all func should raise
         return self.cmdf("remote", "get-url", name, flag=flag + 'n0')
 
     def remote_add(self, name, url, flag='x', **options):
@@ -53,6 +135,20 @@ class Git(object):
 
     def tree_of(self, commit, flag=''):
         return self.cmdf("rev-parse", commit + "^{tree}", flag=flag + 'n0')
+
+    def tree_commit(self, treeish, commit_message, parent_commits, flag='x'):
+
+        """
+        Create a commit of content ``treeish``, ``commit_message``, and add all
+        commit hashes in ``parent_commits`` as its parents.
+        """
+
+        parent_args = []
+        for c in parent_commits:
+            parent_args.extend(['-p', c])
+
+        return self.cmdf('commit-tree', treeish, *parent_args,
+                         input=commit_message, flag=flag + 'n0')
 
     def tree_items(self, treeish, name_only=False, with_size=False, flag='x'):
         args = []
@@ -70,7 +166,7 @@ class Git(object):
         itms = self.tree_items(cur_tree)
 
         if sep not in path:
-            return self.tree_new(itms, path, treeish, flag='x')
+            return self.tree_new_replace(itms, path, treeish, flag='x')
 
         # a/b/c -> a, b/c
         p0, left = path.split(sep, 1)
@@ -80,17 +176,17 @@ class Git(object):
 
             newsubtree = treeish
             for p in reversed(left.split(sep)):
-                newsubtree = self.tree_new([], p, newsubtree, flag='x')
+                newsubtree = self.tree_new_replace([], p, newsubtree, flag='x')
         else:
 
             subtree = p0item["object"]
             newsubtree = self.tree_add_obj(subtree, left, treeish)
 
-        return self.tree_new(itms, p0, newsubtree, flag='x')
+        return self.tree_new_replace(itms, p0, newsubtree, flag='x')
 
     def tree_find_item(self, treeish, fn=None, typ=None):
         for itm in self.tree_items(treeish):
-            itm = self.parse_tree_item(itm)
+            itm = self.treeitem_parse(itm)
             if fn is not None and itm["fn"] != fn:
                 continue
             if typ is not None and itm["type"] != typ:
@@ -99,7 +195,7 @@ class Git(object):
             return itm
         return None
 
-    def parse_tree_item(self, line):
+    def treeitem_parse(self, line):
 
         # git-ls-tree output:
         #     <mode> SP <type> SP <object> TAB <file>
@@ -124,16 +220,28 @@ class Git(object):
 
         return rst
 
-    def tree_new(self, itms, name, obj, mode=None, flag='x'):
+    def tree_new(self, itms, flag='x'):
 
-        newitems = [x for x in itms
-                    if self.parse_tree_item(x)["fn"] != name]
+        treeish = self.cmdf("mktree", input="\n".join(itms), flag=flag + 'n0')
+        return treeish
 
-        itm = self.treeitem_new(name, obj, mode=mode)
+    def tree_new_replace(self, itms, name, obj, mode=None, flag='x'):
 
-        newitems.append(itm)
-        new_treeish = self.cmdf("mktree", input="\n".join(newitems), flag=flag + 'n0')
+        new_items = self.treeitems_replace_item(itms, name, obj, mode=mode)
+
+        new_treeish = self.cmdf("mktree", input="\n".join(new_items), flag=flag + 'n0')
         return new_treeish
+
+    def treeitems_replace_item(self, itms, name, obj, mode=None):
+
+        new_items = [x for x in itms
+                     if self.treeitem_parse(x)["fn"] != name]
+
+        if obj is not None:
+            itm = self.treeitem_new(name, obj, mode=mode)
+            new_items.append(itm)
+
+        return new_items
 
     # treeitem
 

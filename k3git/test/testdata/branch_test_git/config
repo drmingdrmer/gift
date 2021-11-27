@@ -1,0 +1,22 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[remote "origin"]
+	url = ../rr
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "master"]
+	remote = origin
+	merge = refs/heads/master
+[remote "upstream"]
+	url = ../rr
+	fetch = +refs/heads/*:refs/remotes/upstream/*
+[branch "dev"]
+	remote = upstream
+	merge = refs/heads/master
+[branch "b2"]
+	remote = .
+	merge = refs/heads/base
