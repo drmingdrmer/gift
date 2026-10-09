@@ -4,7 +4,8 @@
 
 # TODO test: commit --sub with dirty work dir
 # TODO commit --sub add history to commit log
-import imp
+import importlib.machinery
+import importlib.util
 import os
 import shutil
 import tempfile
@@ -20,7 +21,10 @@ from k3handy import cmdx
 from k3handy import dd
 from k3handy import pjoin
 
-gift = imp.load_source('gift', './gift')
+loader = importlib.machinery.SourceFileLoader('gift', './gift')
+spec = importlib.util.spec_from_loader('gift', loader)
+gift = importlib.util.module_from_spec(spec)
+loader.exec_module(gift)
 
 CalledProcessError = gift.CalledProcessError
 
