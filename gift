@@ -412,10 +412,6 @@ class Gift(object):
                 g.cmdf(*cmds, flag='xp')
                 # TODO run gift in a git-dir
 
-        # Sub-repo config is not loaded in a git-dir
-        if self.in_git_dir:
-            return
-
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
             # A checkout or pull may have changed .gift
@@ -440,6 +436,11 @@ class Gift(object):
         return cmd, issub, [cmd] + cmds
 
     def _get_head_refs(self):
+        # Sub-repo config is not loaded in a git-dir, and without .gift there
+        # is no sub-repo: skip the git process
+        if self.in_git_dir or not os.path.isfile(self.confpath):
+            return None
+
         g = self._g()
         try:
             lines = g.cmdf("show", "HEAD:" + refsfn, flag='xo')

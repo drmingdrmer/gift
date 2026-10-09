@@ -872,6 +872,26 @@ class TestGift(BaseTest):
         _, _, err = cmdx(giftp, "-c", insteadof, "status", cwd=subbarp)
         self.assertEqual([], err)
 
+    def test_no_gift_file_skips_refs(self):
+        # emptyp has no .gift, so gift runs no extra git process for .gift-refs
+        cmdx(giftp, "init", cwd=emptyp)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracep = pjoin(tmpdir, "trace")
+            cmdx(giftp, "rev-parse", "--git-dir", cwd=emptyp, env={"GIT_TRACE": tracep})
+            lines = fread(tracep).splitlines()
+
+        cmds = []
+        for line in lines:
+            if "trace: built-in: " in line:
+                cmds.append(line.split("trace: built-in: ", 1)[1])
+
+        self.assertEqual([
+            "git rev-parse --absolute-git-dir",
+            "git rev-parse --show-toplevel",
+            "git rev-parse --git-dir",
+        ], cmds)
+
 
 def force_remove(fn):
 
