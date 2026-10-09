@@ -28,6 +28,7 @@ from k3handy import CMD_RAISE_ONELINE
 from k3handy import CMD_RAISE_STDOUT
 from k3handy import CmdFlag
 from k3handy import cmd0
+from k3handy import cmdf
 from k3handy import cmdx
 from k3handy import dd
 from k3handy import display
@@ -41,6 +42,9 @@ conffn = ".gift"
 refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
 CMD_RAISE_PASS = [CmdFlag.RAISE, CmdFlag.PASS]
+
+# Commands that never move HEAD, so they never change .gift-refs in HEAD
+head_fixed_cmds = {"add", "blame", "branch", "diff", "grep", "log", "ls-files", "rev-parse", "show", "status"}
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +104,13 @@ class Gift(object):
         git_dir_specified = self.git_dir is not None
 
         if self.git_dir is None:
-            try:
-                self.git_dir = cmd0(self.gitpath, "rev-parse", "--absolute-git-dir", cwd=self.cwd)
-                dd("git_dir:", self.git_dir)
-            except CalledProcessError:
-                dd("not in a git dir")
+            # One git process for both dirs. In a git dir, --show-toplevel
+            # fails after the git dir is printed.
+            _, out, _ = cmdf(self.gitpath, "rev-parse", "--absolute-git-dir", "--show-toplevel", cwd=self.cwd)
+            if len(out) > 0:
+                self.git_dir = out[0]
+            if len(out) > 1 and self.working_dir is None:
+                self.working_dir = out[1]
 
         dd("git_dir:", self.git_dir)
 
@@ -482,9 +488,7 @@ class Gift(object):
             display(2, "GIFT: warning: " + str(conferr))
             self.conf = {"dirs": {}}
 
-        # A parse error is reported by the read after the command
-        refs0 = self._get_head_refs(warn=False)
-
+        follow_head = False
         if self.in_git_dir:
             if issub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
@@ -522,9 +526,20 @@ class Gift(object):
                 g = self._g(sb)
                 g.cmdf(*cmds, flag=CMD_RAISE_PASS)
             else:
+                # Only a command on the super repo that can move HEAD can
+                # change .gift-refs in HEAD
+                follow_head = cmd not in head_fixed_cmds
+                refs0 = None
+                if follow_head:
+                    # A parse error is reported by the read after the command
+                    refs0 = self._get_head_refs(warn=False)
+
                 g = self._g()
                 g.cmdf(*cmds, flag=CMD_RAISE_PASS)
                 # TODO run gift in a git-dir
+
+        if not follow_head:
+            return
 
         refs1 = self._get_head_refs(warn=True)
         if refs0 != refs1 and refs1 is not None:

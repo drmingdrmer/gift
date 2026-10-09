@@ -106,6 +106,19 @@ class BaseTest(unittest.TestCase):
 
         # TODO test no .gift file
 
+    def _git_trace(self, *cmds, cwd):
+        # The git commands that one gift command runs
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracep = pjoin(tmpdir, "trace")
+            cmdx(giftp, *cmds, cwd=cwd, env={"GIT_TRACE": tracep})
+            lines = fread(tracep).splitlines()
+
+        traced = []
+        for line in lines:
+            if "trace: built-in: " in line:
+                traced.append(line.split("trace: built-in: ", 1)[1])
+        return traced
+
     def _gitoutput(self, cmds, lines, **kwargs):
         _, out, _ = cmdx(*cmds, **kwargs)
         self.assertEqual(lines, out)
@@ -1176,20 +1189,26 @@ class TestGift(BaseTest):
         # emptyp has no .gift, so gift runs no extra git process for .gift-refs
         cmdx(giftp, "init", cwd=emptyp)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tracep = pjoin(tmpdir, "trace")
-            cmdx(giftp, "rev-parse", "--git-dir", cwd=emptyp, env={"GIT_TRACE": tracep})
-            lines = fread(tracep).splitlines()
-
-        cmds = []
-        for line in lines:
-            if "trace: built-in: " in line:
-                cmds.append(line.split("trace: built-in: ", 1)[1])
-
+        cmds = self._git_trace("checkout", "-q", "-b", "x", cwd=emptyp)
         self.assertEqual([
-            "git rev-parse --absolute-git-dir",
-            "git rev-parse --show-toplevel",
-            "git rev-parse --git-dir",
+            "git rev-parse --absolute-git-dir --show-toplevel",
+            "git checkout -q -b x",
+        ], cmds)
+
+    def test_head_fixed_cmd_skips_refs(self):
+        # log never moves HEAD, so gift reads no .gift-refs for it
+        cmds = self._git_trace("log", "-1", "--oneline", cwd=superp)
+        self.assertEqual([
+            "git rev-parse --absolute-git-dir --show-toplevel",
+            "git log -1 --oneline",
+        ], cmds)
+
+        cmds = self._git_trace("reset", "-q", cwd=superp)
+        self.assertEqual([
+            "git rev-parse --absolute-git-dir --show-toplevel",
+            "git show HEAD:.gift-refs",
+            "git reset -q",
+            "git show HEAD:.gift-refs",
         ], cmds)
 
     def test_commit_sub_args(self):
@@ -1259,9 +1278,9 @@ class TestGift(BaseTest):
         cmdx(origit, "add", ".gift-refs", cwd=superp)
         cmdx(origit, *ident_args, "commit", "-m", "bad refs", cwd=superp)
 
-        # The error goes to stderr once, apart from the output of the command
-        _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
-        self.assertEqual(["bad refs"], out)
+        # The error goes to stderr once, and not to stdout
+        _, out, err = cmdx(giftp, "reset", "-q", "HEAD", cwd=superp)
+        self.assertEqual([], out)
 
         gift_lines = [line for line in err if line.startswith("GIFT: ")]
         self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:"], gift_lines)
