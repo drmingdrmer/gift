@@ -53,7 +53,7 @@ class Gift(object):
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
     def __init__(self, opt):
-        self.gitopt = opt
+        self.gitopt = opt.clone()
         if self.gitopt.opt.get('exec_path') is None:
             self.gitpath = 'git'
         else:
@@ -69,6 +69,8 @@ class Gift(object):
 
         self.startpath = st
         self.cwd = self.startpath
+        # Git objects run in self.cwd, so passing -C to git would apply it twice
+        self.gitopt.opt['startpath'] = []
 
         self.git_dir = prebase(self.startpath, self.gitopt.opt['git_dir'])
         self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])

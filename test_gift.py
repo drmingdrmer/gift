@@ -345,6 +345,10 @@ class TestGiftDelegate(BaseTest):
 
         self.assertEqual(['.gift', 'imsuperman'], out)
 
+        out = cmdout(giftp, '-C', pjoin('testdata', 'super'),
+                     "log", "-1", "--format=%s", cwd=this_base)
+        self.assertEqual(['add super'], out)
+
     def test_error_output(self):
         e = None
         try:
