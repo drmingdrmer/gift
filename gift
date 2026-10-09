@@ -650,6 +650,14 @@ if __name__ == "__main__":
     # TODO test command such "git box": git-box: git rev-parse --git-dir
     gift = Gift(gitopt)
 
+    # Every git process runs in this dir; fail as git -C does
+    if not os.path.isdir(gift.cwd):
+        reason = "No such file or directory"
+        if os.path.exists(gift.cwd):
+            reason = "Not a directory"
+        display(2, "fatal: cannot change to '" + gift.cwd + "': " + reason)
+        sys.exit(128)
+
     lvl = logging.INFO
     if verbose > 0:
         lvl = logging.DEBUG

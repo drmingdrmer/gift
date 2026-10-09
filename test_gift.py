@@ -368,6 +368,22 @@ class TestGiftDelegate(BaseTest):
             self.assertFalse(os.path.exists(pjoin(tmpdir, ".git")))
             self.assertTrue(os.path.isdir(pjoin(tmpdir, "newrepo", ".git")))
 
+    def test_opt_big_c_missing_dir(self):
+        missing = pjoin(superp, "nosuchdir")
+        want = ["fatal: cannot change to '" + missing + "': No such file or directory"]
+
+        # A git command, an informative command, and no command
+        for cmds in (["status"], ["--version"], []):
+            e = None
+            try:
+                cmdx(giftp, '-C', "nosuchdir", *cmds, cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(128, e.returncode, cmds)
+            self.assertEqual([], e.out, cmds)
+            self.assertEqual(want, e.err, cmds)
+
     def test_env_git_dir(self):
         out = cmdout(giftp, "log", "-1", "--format=%s",
                      cwd=this_base, env={"GIT_DIR": bargitp})
