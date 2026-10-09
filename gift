@@ -544,8 +544,23 @@ class Gift(object):
         y = self.read_conf()
         y["dirs"][subdir] = remote
         cont = yaml.dump(y, default_flow_style=False)
+
+        # Commit .gift only after the clone works: a bad entry in HEAD would
+        # break every later --sub command, in every clone
+        oldcont = None
+        if os.path.isfile(self.confpath):
+            oldcont = fread(self.confpath)
+
         fwrite(self.confpath, cont)
-        self.init_git_config()
+        try:
+            self.init_git_config()
+            self.check_worktree(self.conf["dirs"][subdir])
+        except BaseException:
+            if oldcont is None:
+                os.unlink(self.confpath)
+            else:
+                fwrite(self.confpath, oldcont)
+            raise
 
         g = self._g()
         g.cmdf("add", self.confpath, flag=CmdFlag.RAISE)

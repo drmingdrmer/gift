@@ -546,6 +546,37 @@ class TestGift(BaseTest):
         ]), emptyp, ".gift-refs")
         self._fcontent("bar\n", emptyp, "path/to/bar/bar")
 
+    def test_clone_sub_failed(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        confp = pjoin(emptyp, ".gift")
+
+        # A bad url, before any .gift exists
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../nosuch@master", "bad", cwd=emptyp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(128, e.returncode)
+        self.assertFalse(os.path.exists(confp))
+        self.assertEqual([], cmdout(origit, "rev-list", "--all", cwd=emptyp))
+
+        # A bad branch, with .gift from an earlier clone --sub
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=emptyp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=emptyp)
+
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@nosuch", "bad", cwd=emptyp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(1, e.returncode)
+        self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
+
+        cmdx(giftp, "init", "--sub", cwd=emptyp)
+
     def test_init_sub(self):
         self._nofile(subbarp, "bar")
         self._nofile(subwowp, "wow")
