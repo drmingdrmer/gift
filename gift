@@ -343,6 +343,34 @@ class Gift(object):
                 g.reset_to_commit('mixed', recorded)
                 g.cmdf('branch', '--set-upstream-to=' + upstream, flag=CmdFlag.RAISE)
 
+        self.try_switch_branch(g, sb)
+
+    def try_switch_branch(self, g, sb):
+        # gift.branch is the .gift branch that the sub-repo was last set to.
+        # A changed .gift branch moves the sub-repo once, so a branch that the
+        # user checks out later stays.
+        branch = sb['upstream']['branch']
+        prev = g.cmdf("config", "--get", "gift.branch", flag=CMD_NONE_ONELINE)
+        if prev == branch:
+            return
+
+        # Without a record, as from an older gift, the sub-repo is taken as set
+        if prev is not None:
+            changed = ".gift changed the branch from " + prev + " to " + branch
+            changes = g.cmdf("status", "--porcelain", "--untracked-files=no", flag=CMD_RAISE_STDOUT)
+            if changes != []:
+                g.out(2, "warning:", changed + ", but the work tree has local changes")
+                return
+
+            code, _, err = g.cmdf("checkout", branch)
+            if code != 0:
+                g.out(2, "warning:", changed + ", but checkout failed:")
+                display(2, err)
+                return
+            g.out(2, changed + ": checkout", branch)
+
+        g.cmdf("config", "gift.branch", branch, flag=CmdFlag.RAISE)
+
     def get_subrepo_config(self, subdir):
 
         # TODO test subdir not in working_dir?

@@ -1108,6 +1108,50 @@ class TestGift(BaseTest):
         _, _, err = cmdx(giftp, "-c", insteadof, "status", cwd=subbarp)
         self.assertEqual([], err)
 
+    def test_changed_branch(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        # bargit gets a branch dev with a new file, and foo/bar fetches it
+        cmdx(origit, "clone", bargitp, barp)
+        cmdx(origit, "checkout", "-b", "dev", cwd=barp)
+        fwrite(pjoin(barp, "dev"), "dev")
+        cmdx(origit, "add", "dev", cwd=barp)
+        cmdx(origit, *ident_args, "commit", "-m", "add dev", cwd=barp)
+        cmdx(origit, "push", "origin", "dev", cwd=barp)
+        cmdx(giftp, "fetch", cwd=subbarp)
+
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: ../bargit@dev\n  foo/wow: ../wowgit@master\n")
+
+        # Local changes keep foo/bar on master
+        fwrite(pjoin(subbarp, "bar"), "changed")
+        _, _, err = cmdx(giftp, "status", cwd=subbarp)
+        self.assertEqual([
+            "GIFT: foo/bar: warning: .gift changed the branch from master to dev,"
+            " but the work tree has local changes",
+        ], err)
+        self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
+
+        # A clean foo/bar moves to dev
+        fwrite(pjoin(subbarp, "bar"), "bar\n")
+        _, _, err = cmdx(giftp, "status", cwd=subbarp)
+        self.assertEqual(["GIFT: foo/bar: .gift changed the branch from master to dev: checkout dev"], err)
+        self._fcontent("dev", subbarp, "dev")
+        self._gitoutput([giftp, "rev-parse", "--abbrev-ref", "@{upstream}"], ["origin/dev"], cwd=subbarp)
+
+        # A branch that the user checks out later stays
+        cmdx(giftp, "checkout", "master", cwd=subbarp)
+        _, _, err = cmdx(giftp, "status", cwd=subbarp)
+        self.assertEqual([], err)
+        self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
+
+        # Without a record, as from an older gift, foo/bar is taken as set
+        bargitdir = pjoin(supergitp, "gift", "subdir", "foo", "bar")
+        cmdx(origit, "--git-dir=" + bargitdir, "config", "--unset", "gift.branch")
+        _, _, err = cmdx(giftp, "status", cwd=subbarp)
+        self.assertEqual([], err)
+        self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
+        self._gitoutput([origit, "--git-dir=" + bargitdir, "config", "gift.branch"], ["dev"])
+
     def test_no_gift_file_skips_refs(self):
         # emptyp has no .gift, so gift runs no extra git process for .gift-refs
         cmdx(giftp, "init", cwd=emptyp)
