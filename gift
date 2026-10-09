@@ -541,6 +541,9 @@ class Gift(object):
         #
         # TODO test ".gift" without "remotes"
         # TODO test clone --sub
+        if len(cmds) != 3:
+            raise GiftError("usage: gift clone --sub <url>@<branch> <dir>")
+
         remote = cmds[1]
         subdir = cmds[2]
         # TODO overwrite existent conf?
@@ -583,7 +586,13 @@ class Gift(object):
         self.x_init_sub([])
         self.x_commit_sub([])
 
+    def check_no_args(self, cmds):
+        args = cmds[1:]
+        if args != []:
+            raise GiftError(cmds[0] + " --sub accepts no argument, got: " + " ".join(args))
+
     def x_init_sub(self, cmds):
+        self.check_no_args(cmds)
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
             self.check_worktree(sb)
@@ -647,6 +656,7 @@ class Gift(object):
         self._populate_ref(refs)
 
     def x_fetch_sub(self, cmds):
+        self.check_no_args(cmds)
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
             self.check_worktree(sb)
@@ -659,6 +669,7 @@ class Gift(object):
             self._populate_ref(refs)
 
     def x_merge_sub(self, cmds):
+        self.check_no_args(cmds)
         # only ff-only allowed
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
@@ -675,6 +686,11 @@ class Gift(object):
                           '--keep',
                           '-q',
                           '--quiet', ]
+        unknown = [c for c in cmds[1:] if c not in candidate_args]
+        if unknown != []:
+            msg = "reset --sub accepts only " + ", ".join(candidate_args) + ", got: " + " ".join(unknown)
+            raise GiftError(msg)
+
         args = []
         for c in candidate_args:
             if c in cmds:

@@ -1148,6 +1148,33 @@ class TestGift(BaseTest):
         self.assertEqual(2, e.returncode)
         self.assertEqual(["commit --sub accepts only -m <msg>, got: --amend"], e.err)
 
+    def test_sub_args(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+
+        modes = "--soft, --mixed, -N, --hard, --merge, --keep, -q, --quiet"
+        cases = [
+            (["init", "--sub", "x"], "init --sub accepts no argument, got: x"),
+            (["fetch", "--sub", "nosuchremote"], "fetch --sub accepts no argument, got: nosuchremote"),
+            (["merge", "--sub", "nosuchbranch"], "merge --sub accepts no argument, got: nosuchbranch"),
+            (["reset", "--sub", "--hard", "HEAD"], "reset --sub accepts only " + modes + ", got: HEAD"),
+            (["clone", "--sub", "../bargit@master"], "usage: gift clone --sub <url>@<branch> <dir>"),
+        ]
+        for cmds, msg in cases:
+            e = None
+            try:
+                cmdx(giftp, *cmds, cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(2, e.returncode, cmds)
+            self.assertEqual([msg], e.err, cmds)
+
+        # reset --sub did not move foo/bar back to super/head
+        self.assertEqual(newbar, cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp))
+
     def test_init_sub_branch_from_gift(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
