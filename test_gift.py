@@ -762,6 +762,17 @@ class TestGift(BaseTest):
         self.assertEqual([], e.out)
         self.assertEqual(["--sub is not supported for: push"], e.err)
 
+    def test_commit_sub_keeps_staged_changes(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        fwrite(pjoin(superp, "imsuperman"), "staged")
+        cmdx(giftp, "add", "imsuperman", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        self._gitoutput([giftp, "diff", "--cached", "--name-only"],
+                        ["imsuperman"], cwd=superp)
+        self._gitoutput([giftp, "show", ":imsuperman"], ["staged"], cwd=superp)
+
 
 def force_remove(fn):
 

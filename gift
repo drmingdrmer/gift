@@ -463,11 +463,13 @@ class Gift(object):
         supertree = g.tree_of("HEAD", flag='x')
         parent = g.rev_of("HEAD")
         refs = []
+        paths = []
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
             self.check_worktree(sb)
             supertree, commithash = self._add_sub(supertree, sb)
             refs.append([sb["dir"], commithash])
+            paths.append(pjoin(self.working_dir, sb["dir"]))
 
         refs = sorted(refs)
         cont = yaml.dump(refs, default_flow_style=False)
@@ -478,7 +480,10 @@ class Gift(object):
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
 
         newcommit = g.cmdf("commit-tree", "-p", parent, supertree, input="commit subdirs", flag='x0')
-        g.cmdf("reset", newcommit, flag='x')
+
+        # Keep other staged changes: reset only the paths this commit changed
+        g.cmdf("reset", newcommit, "--", statep, *paths, flag='x')
+        g.cmdf("update-ref", "-m", "commit subdirs", "HEAD", newcommit, parent, flag='x')
 
         self._populate_ref(refs)
 
