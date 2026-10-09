@@ -246,12 +246,21 @@ class Gift(object):
 
             up = sb['upstream']
 
-            code, out, err = g.checkout(up["branch"], flag='')
-            if code == 0:
-                pass
+            # If .gift-refs records a commit for this dir, the super repo has
+            # already checked out its files: adopt it and keep the files.
+            refs = []
+            statep = pjoin(self.working_dir, refsfn)
+            if os.path.isfile(statep):
+                cont = fread(statep)
+                refs = yaml.safe_load(cont)
+
+            recorded = dict(refs).get(sb['dir'])
+            if recorded is None:
+                g.checkout(up["branch"])
             else:
-                display(out, err)
-                g.reset_to_commit('soft', up['name'] + '/' + up['branch'])
+                upstream = up['name'] + '/' + up['branch']
+                g.reset_to_commit('mixed', recorded)
+                g.cmdf('branch', '--set-upstream-to=' + upstream, flag='x')
 
     def get_subrepo_config(self, subdir):
 

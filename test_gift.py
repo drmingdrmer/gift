@@ -515,6 +515,25 @@ class TestGift(BaseTest):
             self._gitoutput([giftp, "ls-files"],
                             [".gift", "imsuperman"], cwd=superp)
 
+    def test_init_sub_with_files_from_super(self):
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        self._add_commit_to_bar_from_other_clone()
+
+        # A fresh clone of super has the files of bar, but no git dir for bar
+        force_remove(pjoin(supergitp, "gift", "subdir", "foo", "bar"))
+
+        # It should adopt the commit in .gift-refs and keep the files
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        bar_head = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+        self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", bar_head)
+
+        self._gitoutput([giftp, "status", "--porcelain"], [], cwd=subbarp)
+        self._gitoutput([giftp, "rev-parse", "--abbrev-ref", "@{upstream}"],
+                        ["origin/master"], cwd=subbarp)
+
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         cmdx(giftp, "add", "foo", cwd=superp)
