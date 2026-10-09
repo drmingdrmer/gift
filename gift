@@ -57,6 +57,21 @@ class GiftError(Exception):
         self.err = [msg]
 
 
+def is_relative_path(url):
+    # git reads a url as a local path if it has no "://" and no ":" before
+    # its first "/", as in "host:path". git expands a leading "~" itself.
+    if url == "" or "://" in url:
+        return False
+
+    colon = url.find(":")
+    slash = url.find("/")
+    has_host = colon != -1 and (slash == -1 or colon < slash)
+    if has_host:
+        return False
+
+    return not os.path.isabs(url) and not url.startswith("~")
+
+
 class Gift(object):
     """
     """
@@ -218,7 +233,7 @@ class Gift(object):
             # A relative url is relative to the super repo root, where .gift
             # is, but git resolves it against the cwd of each git process
             url = ups[1]
-            if url.startswith(("./", "../")):
+            if is_relative_path(url):
                 url = os.path.normpath(pjoin(self.working_dir, url))
 
             sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
@@ -606,7 +621,7 @@ class Gift(object):
         # .gift holds them relative to the super repo root.
         subdir = os.path.relpath(pjoin(self.cwd, subdir), self.working_dir)
         url, sep, branch = remote.rpartition("@")
-        if url.startswith(("./", "../")):
+        if is_relative_path(url):
             url = os.path.relpath(pjoin(self.cwd, url), self.working_dir)
             if not url.startswith("../"):
                 url = "./" + url

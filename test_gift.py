@@ -174,6 +174,25 @@ class TestGiftAPI(BaseTest):
         ups = gg.parse_remote("wiki", "ssh://git@github.com/a/b.wiki.git@master")
         self.assertEqual(["origin", "ssh://git@github.com/a/b.wiki.git", "master"], ups)
 
+    def test_is_relative_path(self):
+        # Whether git reads the url as a path relative to its cwd
+        cases = {
+            "up.git": True,
+            "./up.git": True,
+            "../up.git": True,
+            "dir/a:b.git": True,
+            "": False,
+            "/abs/up.git": False,
+            "~/up.git": False,
+            "~user/up.git": False,
+            "host:up.git": False,
+            "git@host:dir/up.git": False,
+            "https://host/dir/up.git": False,
+            "file:///abs/up.git": False,
+        }
+        got = {url: gift.is_relative_path(url) for url in cases}
+        self.assertEqual(cases, got)
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -606,14 +625,18 @@ class TestGift(BaseTest):
         cmdx(origit, "clone", "--bare", bargitp, pjoin(emptyp, "up.git"))
         dir1 = pjoin(emptyp, "dir1")
         os.mkdir(dir1)
+        cmdx(origit, "clone", "--bare", bargitp, pjoin(dir1, "here.git"))
 
         # As git clone does, <dir> and a relative <url> are read from the cwd
         cmdx(giftp, *ident_args, "clone", "--sub", "../../bargit@master", "bar", cwd=dir1)
         cmdx(giftp, *ident_args, "clone", "--sub", "../up.git@master", "up", cwd=dir1)
+        cmdx(giftp, *ident_args, "clone", "--sub", "here.git@master", "here", cwd=dir1)
 
-        self._fcontent("dirs:\n  dir1/bar: ../bargit@master\n  dir1/up: ./up.git@master\n", emptyp, ".gift")
+        self._fcontent("dirs:\n  dir1/bar: ../bargit@master\n  dir1/here: ./dir1/here.git@master\n"
+                       "  dir1/up: ./up.git@master\n", emptyp, ".gift")
         self._fcontent("bar\n", dir1, "bar", "bar")
         self._fcontent("bar\n", dir1, "up", "bar")
+        self._fcontent("bar\n", dir1, "here", "bar")
 
     def test_init_sub(self):
         self._nofile(subbarp, "bar")
@@ -1123,6 +1146,20 @@ class TestGift(BaseTest):
         cmdx(giftp, "fetch", "--sub", cwd=subbarp)
         fetched_hash = cmd0(giftp, "rev-parse", "origin/master", cwd=subbarp)
         self.assertEqual(headhash, fetched_hash)
+
+    def test_relative_url_without_dot(self):
+        # up.git in .gift is relative to emptyp, not to dir1
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(origit, "clone", "--bare", bargitp, pjoin(emptyp, "up.git"))
+        fwrite(pjoin(emptyp, ".gift"), "dirs:\n  up: up.git@master\n")
+        dir1 = pjoin(emptyp, "dir1")
+        os.mkdir(dir1)
+
+        cmdx(giftp, "init", "--sub", cwd=dir1)
+        cmdx(giftp, "fetch", "--sub", cwd=dir1)
+
+        self._fcontent("bar\n", emptyp, "up", "bar")
+        self._gitoutput([giftp, "remote", "get-url", "origin"], [pjoin(emptyp, "up.git")], cwd=pjoin(emptyp, "up"))
 
     def test_changed_url(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
