@@ -352,7 +352,8 @@ class Gift(object):
 
         cmd, issub, cmds = self._arg_param(cmds)
 
-        refs0 = self._get_head_refs()
+        # A parse error is reported by the read after the command
+        refs0 = self._get_head_refs(warn=False)
 
         if self.in_git_dir:
             if issub:
@@ -394,7 +395,7 @@ class Gift(object):
                 g.cmdf(*cmds, flag='xp')
                 # TODO run gift in a git-dir
 
-        refs1 = self._get_head_refs()
+        refs1 = self._get_head_refs(warn=True)
         if refs0 != refs1 and refs1 is not None:
             # A checkout or pull may have changed .gift
             self.conf = self.parse()
@@ -417,7 +418,7 @@ class Gift(object):
 
         return cmd, issub, [cmd] + cmds
 
-    def _get_head_refs(self):
+    def _get_head_refs(self, warn):
         # Sub-repo config is not loaded in a git-dir, and without .gift there
         # is no sub-repo: skip the git process
         if self.in_git_dir or not os.path.isfile(self.confpath):
@@ -432,8 +433,9 @@ class Gift(object):
         cont = "\n".join(lines)
         try:
             return yaml.safe_load(cont)
-        except Exception as e:
-            print(repr(e))
+        except yaml.YAMLError as e:
+            if warn:
+                display(2, ["GIFT: can not parse " + refsfn + " in HEAD:", str(e)])
             return None
 
     def x_clone_sub(self, cmds):

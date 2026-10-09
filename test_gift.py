@@ -927,6 +927,18 @@ class TestGift(BaseTest):
 
         self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
 
+    def test_bad_gift_refs(self):
+        fwrite(pjoin(superp, ".gift-refs"), "- [foo/bar\n")
+        cmdx(origit, "add", ".gift-refs", cwd=superp)
+        cmdx(origit, *ident_args, "commit", "-m", "bad refs", cwd=superp)
+
+        # The error goes to stderr once, apart from the output of the command
+        _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
+        self.assertEqual(["bad refs"], out)
+
+        gift_lines = [line for line in err if line.startswith("GIFT: ")]
+        self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:"], gift_lines)
+
 
 def force_remove(fn):
 
