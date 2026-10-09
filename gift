@@ -325,9 +325,7 @@ class Gift(object):
         # and quit.
         if cmds[0] == "init" and '--sub' not in cmds:
             # delegate to original git
-            # TODO if user invoke "git --git-dir", original git still need env or else
-            _, out, err = cmdx(self.gitpath, *cmds)
-            display(out, err)
+            self._g().cmdf(*cmds, flag='xp')
             return
 
         self.init_git_config()

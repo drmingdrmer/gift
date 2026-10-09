@@ -360,6 +360,14 @@ class TestGiftDelegate(BaseTest):
 
         self.assertTrue(os.path.isdir(pjoin(emptyp, ".git", "gift", "subdir", "bar")))
 
+    def test_opt_big_c_init(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.mkdir(pjoin(tmpdir, "newrepo"))
+            cmdx(giftp, '-C', "newrepo", "init", cwd=tmpdir)
+
+            self.assertFalse(os.path.exists(pjoin(tmpdir, ".git")))
+            self.assertTrue(os.path.isdir(pjoin(tmpdir, "newrepo", ".git")))
+
     def test_error_output(self):
         e = None
         try:
