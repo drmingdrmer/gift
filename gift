@@ -196,8 +196,21 @@ class Gift(object):
 
         return yml
 
-    def _g(self, what="", bare=False):
+    def _g(self, what="", bare=False, root=False):
         if what == '':
+            if root:
+                # Tree objects hold paths from the work-tree root, but k3git's
+                # tree_items() lists a tree relative to cwd. Absolute dirs keep
+                # a relative --git-dir or --work-tree from resolving against
+                # the root.
+                return Git(
+                    self.gitopt,
+                    gitpath=self.gitpath,
+                    gitdir=self.git_dir,
+                    working_dir=self.working_dir,
+                    cwd=self.working_dir,
+                )
+
             return Git(
                 self.gitopt,
                 gitpath=self.gitpath,
@@ -500,7 +513,7 @@ class Gift(object):
         elif args != []:
             raise GiftError("commit --sub accepts only -m <msg>, got: " + " ".join(args))
 
-        g = self._g()
+        g = self._g(root=True)
         headtree = g.tree_of("HEAD", flag=CmdFlag.RAISE)
         supertree = headtree
         parent = g.rev_of("HEAD")
@@ -595,7 +608,7 @@ class Gift(object):
                 display(e.out, e.err)
 
     def _add_sub(self, supertree, sb):
-        g = self._g()
+        g = self._g(root=True)
 
         g.cmdf("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"], flag=CmdFlag.RAISE)
 

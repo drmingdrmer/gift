@@ -605,6 +605,38 @@ class TestGift(BaseTest):
             superp, ".gift-refs",
         )
 
+    def test_commit_sub_in_sub_dir(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=pjoin(superp, "foo"))
+
+        self._gitoutput([giftp, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [
+            ".gift",
+            ".gift-refs",
+            "foo/bar/bar",
+            "foo/wow/wow",
+            "imsuperman",
+        ],
+            cwd=superp)
+
+    def test_commit_sub_relative_git_dir(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args,
+             "--git-dir=" + pjoin("..", "..", "supergit"),
+             "--work-tree=..",
+             "commit", "--sub",
+             cwd=pjoin(superp, "foo"))
+
+        self._gitoutput([giftp, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [
+            ".gift",
+            ".gift-refs",
+            "foo/bar/bar",
+            "foo/wow/wow",
+            "imsuperman",
+        ],
+            cwd=superp)
+
     def test_fetch_sub(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
