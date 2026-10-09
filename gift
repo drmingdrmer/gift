@@ -369,6 +369,8 @@ class Gift(object):
                 elif cmd == 'reset':
                     return self.x_reset_sub(cmds)
 
+                raise GiftError("--sub is not supported for: " + cmd)
+
             if sb is not None:
                 g = self._g(sb)
                 g.cmdf(*cmds, flag='xp')

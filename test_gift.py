@@ -751,6 +751,17 @@ class TestGift(BaseTest):
         aaa_head = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=subaaap)
         self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", aaa_head)
 
+    def test_unsupported_sub(self):
+        e = None
+        try:
+            cmdx(giftp, "push", "--sub", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([], e.out)
+        self.assertEqual(["--sub is not supported for: push"], e.err)
+
 
 def force_remove(fn):
 
