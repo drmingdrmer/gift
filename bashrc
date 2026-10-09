@@ -1,3 +1,3 @@
 #!/bin/sh
 
-alias git="gift --git=$(which git)"
+alias git=gift
