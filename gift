@@ -171,7 +171,22 @@ class Gift(object):
             return {
                 "dirs": {}
             }
-        yml = yaml.safe_load(cont)
+
+        try:
+            yml = yaml.safe_load(cont)
+        except yaml.MarkedYAMLError as e:
+            msg = "{}: line {}: {}".format(conffn, e.problem_mark.line + 1, e.problem)
+            raise GiftError(msg)
+
+        # An empty .gift, like a missing one, has no sub-repo
+        if yml is None:
+            return {
+                "dirs": {}
+            }
+
+        if not isinstance(yml, dict) or not isinstance(yml.get("dirs"), dict):
+            raise GiftError(conffn + ": expect dirs: {<dir>: <url>@<branch>, ...}")
+
         return yml
 
     def parse(self):
@@ -351,6 +366,20 @@ class Gift(object):
         else:
             return '', None
 
+    def in_sub_repo_dir(self):
+        # Without .gift, a sub git dir tells that a dir is a sub-repo
+        rel = os.path.relpath(self.cwd, self.working_dir)
+        if rel.startswith('..'):
+            return False
+
+        while rel not in ('', '.'):
+            sub_gitdir = self.sub_gitdir_fmt.format(dir=rel)
+            if os.path.isfile(pjoin(self.git_dir, sub_gitdir, "HEAD")):
+                return True
+            rel = os.path.dirname(rel)
+
+        return False
+
     def exec_informative_cmd(self, cmds):
         cmd = cmds[0]
         if cmd == '--version':
@@ -390,13 +419,26 @@ class Gift(object):
             self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
 
-        self.init_git_config()
+        conferr = None
+        try:
+            self.init_git_config()
+        except GiftError as e:
+            conferr = e
 
         if self.git_dir is None:
             self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
 
         cmd, issub, cmds = self._arg_param(cmds)
+
+        # A broken .gift, such as one in a merge conflict, must not block the
+        # plain commands that fix it. In a sub-repo dir, such a command would
+        # go to the super repo instead.
+        if conferr is not None:
+            if issub or self.in_sub_repo_dir():
+                raise conferr
+            display(2, "GIFT: warning: " + str(conferr))
+            self.conf = {"dirs": {}}
 
         # A parse error is reported by the read after the command
         refs0 = self._get_head_refs(warn=False)
@@ -443,8 +485,12 @@ class Gift(object):
 
         refs1 = self._get_head_refs(warn=True)
         if refs0 != refs1 and refs1 is not None:
-            # A checkout or pull may have changed .gift
-            self.conf = self.parse()
+            # A checkout or pull may have changed .gift. If the new one is
+            # broken, the old one still maps each dir to its sub git dir.
+            try:
+                self.conf = self.parse()
+            except GiftError as e:
+                display(2, "GIFT: warning: " + str(e))
             self._populate_ref(refs1)
 
     def _arg_param(self, cmds):

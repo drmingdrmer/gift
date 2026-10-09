@@ -912,14 +912,87 @@ class TestGift(BaseTest):
         for entry, shown in cases:
             fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: " + entry + "\n")
 
+            _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
+            self.assertEqual(["add super"], out)
+            self.assertEqual(["GIFT: warning: .gift: foo/bar: expect <url>@<branch>, got: " + shown], err)
+
+    def test_broken_gift(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: ../bargit@master\n")
+        cmdx(origit, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=superp)
+
+        # Two branches each add a sub-repo, so a merge leaves .gift in conflict
+        for branch in ("b1", "b2"):
+            cmdx(origit, "checkout", "-b", branch, "master", cwd=superp)
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: ../bargit@master\n  " + branch + ": ../bargit@master\n")
+            cmdx(origit, *ident_args, "commit", "-m", branch, ".gift", cwd=superp)
+
+        e = None
+        try:
+            cmdx(origit, *ident_args, "-c", "merge.conflictStyle=merge", "merge", "b1", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+        self.assertEqual(1, e.returncode)
+
+        conferr = ".gift: line 4: could not find expected ':'"
+
+        # A --sub command, or a command in a sub-repo dir, still fails
+        for cmds, cwd in ((["commit", "--sub"], superp), (["status"], subbarp)):
             e = None
             try:
-                cmdx(giftp, "log", "-1", cwd=superp)
+                cmdx(giftp, *cmds, cwd=cwd)
             except CalledProcessError as ee:
                 e = ee
 
-            self.assertEqual(2, e.returncode)
-            self.assertEqual([".gift: foo/bar: expect <url>@<branch>, got: " + shown], e.err)
+            self.assertEqual(2, e.returncode, cmds)
+            self.assertEqual([conferr], e.err, cmds)
+
+        # Other commands run on the super repo, so they can resolve the conflict
+        _, out, err = cmdx(giftp, "diff", "--name-only", "--diff-filter=U", cwd=superp)
+        self.assertEqual([".gift"], out)
+        self.assertEqual(["GIFT: warning: " + conferr], err)
+
+        _, _, err = cmdx(giftp, "merge", "--abort", cwd=superp)
+        self.assertEqual(["GIFT: warning: " + conferr], err)
+
+        _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
+        self.assertEqual(["b2"], out)
+        self.assertEqual([], err)
+
+        # An empty .gift has no sub-repo, and one without dirs: is broken
+        fwrite(pjoin(superp, ".gift"), "")
+        _, _, err = cmdx(giftp, "log", "-1", cwd=superp)
+        self.assertEqual([], err)
+
+        fwrite(pjoin(superp, ".gift"), "foo: 1\n")
+        _, _, err = cmdx(giftp, "log", "-1", cwd=superp)
+        self.assertEqual(["GIFT: warning: .gift: expect dirs: {<dir>: <url>@<branch>, ...}"], err)
+
+    def test_checkout_broken_gift(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        fwrite(pjoin(superp, ".gift"), "foo: 1\n")
+        cmdx(giftp, *ident_args, "commit", "-m", "break .gift", ".gift", cwd=superp)
+        warning = "GIFT: warning: .gift: expect dirs: {<dir>: <url>@<branch>, ...}"
+
+        # This checkout fixes .gift, so super/head follows .gift-refs
+        _, _, err = cmdx(giftp, "checkout", "-q", "HEAD~2", cwd=superp)
+        self.assertEqual([warning], err)
+        self._check_initial_superhead()
+
+        # This checkout breaks .gift, and the .gift read before it still works
+        _, _, err = cmdx(giftp, "checkout", "-q", "master", cwd=superp)
+        self.assertEqual([warning], err)
+
+        # gift refuses to run in a sub-repo dir with a broken .gift
+        bargitdir = pjoin(supergitp, "gift", "subdir", "foo", "bar")
+        superhead = cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "refs/remotes/super/head")
+        self.assertEqual(newbar, superhead)
 
     def test_bad_gift_dir(self):
         # superp/up leads out of the work tree
