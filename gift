@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import copy
-import inspect
 import os
 import sys
 import logging
@@ -10,24 +8,18 @@ import logging
 import yaml
 
 import k3log
-import k3proc
 from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
 from k3git import Git
 from k3handy import cmd0
-from k3handy import cmdf
-from k3handy import cmdpass
-from k3handy import cmdtty
 from k3handy import cmdx
 from k3handy import dd
-from k3handy import ddstack
 from k3handy import display
 from k3handy import pabs
 from k3handy import pjoin
 from k3handy import prebase
 from k3proc import CalledProcessError
-from k3str import to_utf8
 
 version = '0.1.0'
 conffn = ".gift"
@@ -83,16 +75,6 @@ class Gift(object):
 
         self.git_dir = prebase(self.startpath, git_dir)
         self.working_dir = prebase(self.startpath, work_tree)
-
-    def out(self, fd, *msg):
-        #  TODO not used?
-
-        os.write(fd, b"GIFT: ")
-
-        for m in msg:
-            os.write(fd, to_utf8(m))
-            os.write(fd, b" ")
-        os.write(fd, b"\n")
 
     def init_git_config(self):
 
