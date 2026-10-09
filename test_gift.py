@@ -220,7 +220,7 @@ class TestGiftDelegate(BaseTest):
 
     def test_opt_version(self):
         out = cmdout(giftp, "--version", cwd=superp)
-        self.assertEqual('gift version 0.1.0', out[0])
+        self.assertEqual('gift version 0.2.0', out[0])
         self.assertEqual(2, len(out))
 
     def test_opt_help(self):

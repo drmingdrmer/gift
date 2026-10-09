@@ -1,5 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env -S uv run --script
 # coding: utf-8
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "PyYAML~=6.0",
+#     "k3fs~=0.2.0",
+#     "k3git~=0.1.19",
+#     "k3handy~=0.1.13",
+#     "k3log~=0.1.9",
+#     "k3proc~=0.2.18",
+# ]
+# ///
 
 import os
 import sys
@@ -25,7 +36,7 @@ from k3handy import pjoin
 from k3handy import prebase
 from k3proc import CalledProcessError
 
-version = '0.1.0'
+version = '0.2.0'
 conffn = ".gift"
 refsfn = ".gift-refs"
 superref = "refs/remotes/super/head"
