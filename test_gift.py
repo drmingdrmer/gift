@@ -912,6 +912,21 @@ class TestGift(BaseTest):
         self.assertEqual(2, e.returncode)
         self.assertEqual(["commit --sub accepts only -m <msg>, got: --amend"], e.err)
 
+    def test_init_sub_branch_from_gift(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        # As in a fresh clone, init bar from .gift-refs, with another default branch
+        force_remove(pjoin(supergitp, "gift", "subdir", "foo", "bar"))
+        env = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "init.defaultBranch",
+            "GIT_CONFIG_VALUE_0": "main",
+        }
+        cmdx(giftp, "init", "--sub", cwd=superp, env=env)
+
+        self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
+
 
 def force_remove(fn):
 
