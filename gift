@@ -169,12 +169,19 @@ class Gift(object):
 
         for k in dirs:
             ups = self.parse_remote(k, dirs[k])
+
+            # A relative url is relative to the super repo root, where .gift
+            # is, but git resolves it against the cwd of each git process
+            url = ups[1]
+            if url.startswith(("./", "../")):
+                url = os.path.normpath(pjoin(self.working_dir, url))
+
             sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
             dirs[k] = {
                 "dir": k,
                 "upstream": {
                     "name": ups[0],
-                    "url": ups[1],
+                    "url": url,
                     "branch": ups[2],
                 },
                 "refhead": "refs/gift/sub/{dir}".format(dir=k),

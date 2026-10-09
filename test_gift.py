@@ -147,7 +147,7 @@ class TestGiftAPI(BaseTest):
                     'GIT_WORK_TREE': this_base + '/testdata/super/foo/bar'},
             'refhead': 'refs/gift/sub/foo/bar',
             'sub_gitdir': 'gift/subdir/foo/bar',
-            'upstream': {'branch': 'master', 'name': 'origin', 'url': '../bargit'}
+            'upstream': {'branch': 'master', 'name': 'origin', 'url': this_base + '/testdata/bargit'}
         }, sb)
 
 
@@ -508,9 +508,9 @@ class TestGift(BaseTest):
         code, out, err = cmdx(giftp, *ident_args,  "clone", "--sub",
                               "../bargit@master", "path/to/bar", cwd=emptyp)
         for l in (
-                'GIFT: path/to/bar: add remote: origin ../bargit',
-                'GIFT: path/to/bar: fetch origin ../bargit',
-                "From ../bargit",
+                'GIFT: path/to/bar: add remote: origin ' + bargitp,
+                'GIFT: path/to/bar: fetch origin ' + bargitp,
+                "From " + bargitp,
         ):
             self.assertIn(l, "\n".join(err),
                           "it should output fetching status")
@@ -843,6 +843,17 @@ class TestGift(BaseTest):
 
             self.assertEqual(2, e.returncode)
             self.assertEqual([".gift: foo/bar: expect <url>@<branch>, got: " + shown], e.err)
+
+    def test_relative_url_from_sub_dir(self):
+        # ../bargit in .gift is relative to superp, not to subbarp
+        os.makedirs(subbarp)
+        cmdx(giftp, "status", cwd=subbarp)
+        self._fcontent("bar\n", subbarp, "bar")
+
+        headhash = self._add_commit_to_bar_from_other_clone()
+        cmdx(giftp, "fetch", "--sub", cwd=subbarp)
+        fetched_hash = cmd0(giftp, "rev-parse", "origin/master", cwd=subbarp)
+        self.assertEqual(headhash, fetched_hash)
 
 
 def force_remove(fn):
