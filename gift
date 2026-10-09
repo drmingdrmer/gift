@@ -147,6 +147,22 @@ class Gift(object):
 
         return ["origin", elts[0], elts[1]]
 
+    def check_dir(self, subdir):
+        # .gift comes with the repo, so a dir in it must not lead the sub-repo
+        # checkout out of the work tree or into a git dir
+        msg = "{}: {!r}: expect a dir inside the work tree and outside .git".format(conffn, subdir)
+        if not isinstance(subdir, str):
+            raise GiftError(msg)
+
+        # realpath also follows a symlink that leads out of the work tree
+        root = os.path.realpath(self.working_dir)
+        path = os.path.realpath(pjoin(root, subdir))
+        rel = os.path.relpath(path, root)
+        parts = rel.lower().split(os.sep)
+
+        if rel == '.' or parts[0] == '..' or '.git' in parts:
+            raise GiftError(msg)
+
     def read_conf(self):
         try:
             with open(self.confpath, 'r') as f:
@@ -166,6 +182,7 @@ class Gift(object):
         dirs = yml["dirs"]
 
         for k in dirs:
+            self.check_dir(k)
             ups = self.parse_remote(k, dirs[k])
 
             # A relative url is relative to the super repo root, where .gift

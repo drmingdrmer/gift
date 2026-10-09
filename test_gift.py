@@ -921,6 +921,24 @@ class TestGift(BaseTest):
             self.assertEqual(2, e.returncode)
             self.assertEqual([".gift: foo/bar: expect <url>@<branch>, got: " + shown], e.err)
 
+    def test_bad_gift_dir(self):
+        # superp/up leads out of the work tree
+        os.symlink("..", pjoin(superp, "up"))
+
+        for d in ("../x", "/x", "a/../../x", "up/x", ".", ".git/x", ".GIT/x", "a/.git"):
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  " + d + ": ../bargit@master\n")
+
+            e = None
+            try:
+                cmdx(giftp, "init", "--sub", cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(2, e.returncode, d)
+            self.assertEqual([".gift: '" + d + "': expect a dir inside the work tree and outside .git"], e.err, d)
+
+        self.assertFalse(os.path.exists(pjoin(this_base, "testdata", "x")))
+
     def test_relative_url_from_sub_dir(self):
         # ../bargit in .gift is relative to superp, not to subbarp
         os.makedirs(subbarp)
