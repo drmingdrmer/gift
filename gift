@@ -72,8 +72,17 @@ class Gift(object):
         # Git objects run in self.cwd, so passing -C to git would apply it twice
         self.gitopt.opt['startpath'] = []
 
-        self.git_dir = prebase(self.startpath, self.gitopt.opt['git_dir'])
-        self.working_dir = prebase(self.startpath, self.gitopt.opt['work_tree'])
+        # As in git, --git-dir and --work-tree override GIT_DIR and GIT_WORK_TREE
+        git_dir = self.gitopt.opt['git_dir']
+        if git_dir is None:
+            git_dir = os.environ.get('GIT_DIR')
+
+        work_tree = self.gitopt.opt['work_tree']
+        if work_tree is None:
+            work_tree = os.environ.get('GIT_WORK_TREE')
+
+        self.git_dir = prebase(self.startpath, git_dir)
+        self.working_dir = prebase(self.startpath, work_tree)
 
     def out(self, fd, *msg):
         #  TODO not used?

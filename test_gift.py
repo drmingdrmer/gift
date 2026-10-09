@@ -368,6 +368,11 @@ class TestGiftDelegate(BaseTest):
             self.assertFalse(os.path.exists(pjoin(tmpdir, ".git")))
             self.assertTrue(os.path.isdir(pjoin(tmpdir, "newrepo", ".git")))
 
+    def test_env_git_dir(self):
+        out = cmdout(giftp, "log", "-1", "--format=%s",
+                     cwd=this_base, env={"GIT_DIR": bargitp})
+        self.assertEqual(['add bar'], out)
+
     def test_error_output(self):
         e = None
         try:
