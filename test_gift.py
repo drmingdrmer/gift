@@ -619,6 +619,13 @@ class TestGift(BaseTest):
             self._gitoutput([giftp, "ls-files"],
                             [".gift", "imsuperman"], cwd=superp)
 
+    def test_init_sub_with_git_env(self):
+        env = {"GIT_DIR": supergitp, "GIT_WORK_TREE": superp}
+        cmdx(giftp, "init", "--sub", cwd=superp, env=env)
+
+        self._fcontent("bar\n", subbarp, "bar")
+        self._fcontent("wow\n", subwowp, "wow")
+
     def test_init_sub_with_files_from_super(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)

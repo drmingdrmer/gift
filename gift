@@ -296,7 +296,12 @@ class Gift(object):
         up = sb["upstream"]
 
         if not os.path.isdir(wtgpath):
-            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + up["branch"], bareenv["GIT_DIR"])
+            # git init --bare fails with a GIT_WORK_TREE set for the super repo
+            env = dict(os.environ)
+            env.pop("GIT_DIR", None)
+            env.pop("GIT_WORK_TREE", None)
+            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + up["branch"], bareenv["GIT_DIR"],
+                 env=env, inherit_env=False)
         else:
             dd("gitdir exist:", wtgpath)
 
