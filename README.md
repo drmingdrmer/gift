@@ -1,14 +1,23 @@
 # gift
 
-[![Build Status](https://travis-ci.org/drmingdrmer/gift.svg?branch=master)](https://travis-ci.org/drmingdrmer/gift)
+[![Python package](https://github.com/drmingdrmer/gift/actions/workflows/python-package.yml/badge.svg)](https://github.com/drmingdrmer/gift/actions/workflows/python-package.yml)
 
 gift is a fine tool working with mult-repo, multi-branch and multi-workdir.
 
 # Install
 
-```
+gift needs [uv](https://docs.astral.sh/uv/), which installs gift's Python
+dependencies on the first run. Put `gift` in a dir in `PATH`, and let `git`
+call it, as the examples below assume:
 
 ```
+git clone https://github.com/drmingdrmer/gift.git
+ln -s "$PWD/gift/gift" ~/bin/gift
+alias git=gift
+```
+
+gift passes every command to the `git` in `PATH`, and adds the `--sub`
+commands.
 
 # Usage
 
