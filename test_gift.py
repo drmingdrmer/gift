@@ -804,6 +804,29 @@ class TestGift(BaseTest):
         self.assertEqual(superhash, superhash2,
                          "commit in sub dir should not change super dir HEAD")
 
+    def test_named_repo_in_sub(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        # clone needs no repo, so it works as in any other dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdx(giftp, "clone", bargitp, pjoin(tmpdir, "x"), cwd=subbarp)
+            self._fcontent("bar\n", tmpdir, "x", "bar")
+
+        # A git dir and work tree named by the user are the repo to use
+        named = ["--git-dir=" + supergitp, "--work-tree=" + superp]
+        out = cmdout(giftp, *named, "log", "-1", "--format=%s", cwd=subbarp)
+        self.assertEqual(["add super"], out)
+
+        env = {"GIT_DIR": supergitp, "GIT_WORK_TREE": superp}
+        out = cmdout(giftp, "log", "-1", "--format=%s", cwd=subbarp, env=env)
+        self.assertEqual(["add super"], out)
+
+        # Even with a broken .gift
+        fwrite(pjoin(superp, ".gift"), "foo: 1\n")
+        _, out, err = cmdx(giftp, *named, "log", "-1", "--format=%s", cwd=subbarp)
+        self.assertEqual(["add super"], out)
+        self.assertEqual(["GIFT: warning: .gift: expect dirs: {<dir>: <url>@<branch>, ...}"], err)
+
     def test_populate_super_ref(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)

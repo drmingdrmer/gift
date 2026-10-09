@@ -92,6 +92,9 @@ class Gift(object):
         self.git_dir = prebase(self.startpath, git_dir)
         self.working_dir = prebase(self.startpath, work_tree)
 
+        # A repo named by the user is used even in a sub-repo dir
+        self.repo_named = git_dir is not None or work_tree is not None
+
     def init_git_config(self):
 
         git_dir_specified = self.git_dir is not None
@@ -414,7 +417,7 @@ class Gift(object):
 
         # If a command does not need to be run inside a git repo, delegate it
         # and quit.
-        if cmds[0] == "init" and '--sub' not in cmds:
+        if cmds[0] in ("init", "clone") and '--sub' not in cmds:
             # delegate to original git
             self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
@@ -435,7 +438,7 @@ class Gift(object):
         # plain commands that fix it. In a sub-repo dir, such a command would
         # go to the super repo instead.
         if conferr is not None:
-            if issub or self.in_sub_repo_dir():
+            if issub or (not self.repo_named and self.in_sub_repo_dir()):
                 raise conferr
             display(2, "GIFT: warning: " + str(conferr))
             self.conf = {"dirs": {}}
@@ -450,8 +453,9 @@ class Gift(object):
                 g = self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
         else:
 
-            subdir = self.cwd
-            subdir, sb = self.get_subrepo_config(subdir)
+            subdir, sb = '', None
+            if not self.repo_named:
+                subdir, sb = self.get_subrepo_config(self.cwd)
             dd("subdir:", subdir, sb)
 
             if sb is not None:
