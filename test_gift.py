@@ -704,7 +704,7 @@ class TestGift(BaseTest):
         cmdx(giftp, "reset", "HEAD~", cwd=superp)
         head2 = cmdx(giftp, "rev-parse",
                      "refs/remotes/super/head", cwd=subbarp)
-        self.assertNotEqual(head_of_bar, head2)
+        self.assertEqual(head_of_bar, head2)
 
     def test_super_checkout_should_populate_super_ref(self):
 
@@ -725,7 +725,31 @@ class TestGift(BaseTest):
         head_of_bar_after_checkout = cmdx(
             giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
 
-        self.assertNotEqual(head_of_bar, head_of_bar_after_checkout)
+        self.assertEqual(head_of_bar, head_of_bar_after_checkout)
+
+    def test_super_checkout_with_new_sub_repo(self):
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        # The fixture commits .gift in an old format that gift can not parse
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=superp)
+
+        # "aaa" sorts first, so the first line of .gift-refs changes
+        subaaap = pjoin(superp, "aaa")
+        cmdx(giftp, *ident_args, "clone", "--sub",
+             "../bargit@master", "aaa", cwd=superp)
+        cmdx(giftp, "update-ref", "-d", "refs/remotes/super/head", cwd=subaaap)
+        self._remove_super_ref()
+
+        # HEAD~2 is "update .gift", before "aaa" is added
+        cmdx(giftp, "checkout", "HEAD~2", cwd=superp)
+        self._check_initial_superhead()
+
+        # .gift read before this checkout has no "aaa"
+        cmdx(giftp, "checkout", "master", cwd=superp)
+        aaa_head = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=subaaap)
+        self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", aaa_head)
 
 
 def force_remove(fn):

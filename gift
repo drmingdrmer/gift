@@ -377,8 +377,14 @@ class Gift(object):
                 g.cmdf(*cmds, flag='xp')
                 # TODO run gift in a git-dir
 
+        # Sub-repo config is not loaded in a git-dir
+        if self.in_git_dir:
+            return
+
         refs1 = self._get_head_refs()
         if refs0 != refs1 and refs1 is not None:
+            # A checkout or pull may have changed .gift
+            self.conf = self.parse()
             self._populate_ref(refs1)
 
     def _arg_param(self, cmds):
@@ -401,11 +407,11 @@ class Gift(object):
     def _get_head_refs(self):
         g = self._g()
         try:
-            # TODO should not cmd0
-            cont = g.cmdf("show", "HEAD:" + refsfn, flag='x0')
+            lines = g.cmdf("show", "HEAD:" + refsfn, flag='xo')
         except CalledProcessError:
             return None
 
+        cont = "\n".join(lines)
         try:
             return yaml.safe_load(cont)
         except Exception as e:
@@ -512,15 +518,20 @@ class Gift(object):
     def _populate_ref(self, refs):
 
         for subdir, hsh in refs:
-            sb = self.conf["dirs"][subdir]
+            sb = self.conf["dirs"].get(subdir)
+            if sb is None:
+                continue
+
+            # Not initialized yet: `gift init --sub` populates it
+            if not os.path.isdir(sb["env"]["GIT_DIR"]):
+                continue
 
             try:
-                # TODO test this
                 cmdx(self.gitpath, "update-ref", superref, hsh, env=sb["env"])
-            except CalledProcessError:
-                # TODO
-
-                dd("can not update ref")
+            except CalledProcessError as e:
+                g = self._g(sb, bare=True)
+                g.out(2, "can not update", superref, "to", hsh)
+                display(e.out, e.err)
 
     def _add_sub(self, supertree, sb):
         g = self._g()
