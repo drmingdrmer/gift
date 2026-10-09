@@ -826,6 +826,24 @@ class TestGift(BaseTest):
             "foo/bar: can not find commit " + newbar + " recorded in .gift-refs;"
             " push it to origin from the clone that made it", e.err[-1])
 
+    def test_bad_gift_entry(self):
+        cases = [
+            ("../bargit", "'../bargit'"),
+            ("git@github.com:a/b.git", "'git@github.com:a/b.git'"),
+            ("[bar, master]", "['bar', 'master']"),
+        ]
+        for entry, shown in cases:
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: " + entry + "\n")
+
+            e = None
+            try:
+                cmdx(giftp, "log", "-1", cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(2, e.returncode)
+            self.assertEqual([".gift: foo/bar: expect <url>@<branch>, got: " + shown], e.err)
+
 
 def force_remove(fn):
 

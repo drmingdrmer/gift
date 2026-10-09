@@ -135,7 +135,18 @@ class Gift(object):
         self.conf = self.parse()
 
     def parse_remote(self, subdir, remo):
+        usage = "{}: {}: expect <url>@<branch>, got: {!r}".format(conffn, subdir, remo)
+        if not isinstance(remo, str):
+            raise GiftError(usage)
+
         elts = remo.rsplit("@", 1)
+        if len(elts) != 2:
+            raise GiftError(usage)
+
+        # An ssh url without a branch splits at "git@"; a branch name has no ":"
+        if elts[1] == '' or ':' in elts[1]:
+            raise GiftError(usage)
+
         return ["origin", elts[0], elts[1]]
 
     def read_conf(self):
