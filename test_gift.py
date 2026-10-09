@@ -349,6 +349,17 @@ class TestGiftDelegate(BaseTest):
                      "log", "-1", "--format=%s", cwd=this_base)
         self.assertEqual(['add super'], out)
 
+    def test_opt_big_c_sub_gitdir(self):
+        # emptyp/.git is a dir, so `git rev-parse --git-dir` prints ".git"
+        cmdx(giftp, "init", cwd=emptyp)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdx(giftp, *ident_args, '-C', emptyp, "clone", "--sub",
+                 "../bargit@master", "bar", cwd=tmpdir)
+            self.assertFalse(os.path.exists(pjoin(tmpdir, ".git")))
+
+        self.assertTrue(os.path.isdir(pjoin(emptyp, ".git", "gift", "subdir", "bar")))
+
     def test_error_output(self):
         e = None
         try:

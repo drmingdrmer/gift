@@ -91,9 +91,8 @@ class Gift(object):
 
         if self.git_dir is None:
             try:
-                self.git_dir = cmd0(self.gitpath, "rev-parse", "--git-dir", cwd=self.cwd)
+                self.git_dir = cmd0(self.gitpath, "rev-parse", "--absolute-git-dir", cwd=self.cwd)
                 dd("git_dir:", self.git_dir)
-                self.git_dir = pabs(self.git_dir)
             except CalledProcessError:
                 dd("not in a git dir")
 
