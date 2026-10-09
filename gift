@@ -561,6 +561,11 @@ class Gift(object):
             _, out, err = cmdx(self.gitpath, "fetch", sb["upstream"]["name"], env=sb["env"])
             display(out, err)
 
+        # HEAD may record a sub-repo commit that only this fetch brought in
+        refs = self._get_head_refs(warn=True)
+        if refs is not None:
+            self._populate_ref(refs)
+
     def x_merge_sub(self, cmds):
         # only ff-only allowed
         for sub in self.conf["dirs"]:

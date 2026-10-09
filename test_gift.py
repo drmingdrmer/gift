@@ -651,6 +651,27 @@ class TestGift(BaseTest):
 
         self.assertEqual(headhash, fetched_hash)
 
+    def test_fetch_sub_updates_super_ref(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        barhash = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+
+        # Record a foo/bar commit that only the next fetch brings in
+        headhash = self._add_commit_to_bar_from_other_clone()
+        refsp = pjoin(superp, ".gift-refs")
+        refs = fread(refsp)
+        refs = refs.replace(barhash, headhash)
+        fwrite(refsp, refs)
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift-refs", ".gift-refs", cwd=superp)
+
+        cmdx(giftp, "fetch", "--sub", cwd=superp)
+        superhead = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=subbarp)
+        self.assertEqual(headhash, superhead)
+
+        cmdx(giftp, "reset", "--sub", "--hard", cwd=superp)
+        barhead = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+        self.assertEqual(headhash, barhead)
+
     def test_merge_sub(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)
