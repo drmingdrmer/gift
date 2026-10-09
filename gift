@@ -267,6 +267,9 @@ class Gift(object):
             recorded = dict(refs).get(sb['dir'])
             if recorded is None:
                 g.checkout(up["branch"])
+            elif g.obj_type(recorded) is None:
+                msg = "{}: can not find commit {} recorded in {}; push it to {} from the clone that made it"
+                raise GiftError(msg.format(sb['dir'], recorded, refsfn, up['name']))
             else:
                 upstream = up['name'] + '/' + up['branch']
                 g.reset_to_commit('mixed', recorded)
@@ -478,6 +481,14 @@ class Gift(object):
             supertree, commithash = self._add_sub(supertree, sb)
             refs.append([sb["dir"], commithash])
             paths.append(pjoin(self.working_dir, sb["dir"]))
+
+            # Other clones fetch sub-repo commits only from the remote
+            remote = sb["upstream"]["name"]
+            sg = self._g(sb, bare=True)
+            pushed = sg.cmdf("for-each-ref", "--contains", commithash, "refs/remotes/" + remote, flag='xo')
+            if pushed == []:
+                sg.out(2, "warning: commit", commithash, "is not pushed to", remote + ",",
+                       "so other clones can not check it out")
 
         refs = sorted(refs)
         cont = yaml.dump(refs, default_flow_style=False)

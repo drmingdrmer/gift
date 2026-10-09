@@ -801,6 +801,31 @@ class TestGift(BaseTest):
                         ["imsuperman"], cwd=superp)
         self._gitoutput([giftp, "show", ":imsuperman"], ["staged"], cwd=superp)
 
+    def test_commit_sub_unpushed(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
+
+        _, _, err = cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        self.assertEqual([
+            "GIFT: foo/bar: warning: commit " + newbar + " is not pushed to origin,"
+            " so other clones can not check it out",
+        ], err)
+
+        # A fresh clone has no git dir for bar, and origin has no newbar
+        force_remove(pjoin(supergitp, "gift", "subdir", "foo", "bar"))
+
+        e = None
+        try:
+            cmdx(giftp, "init", "--sub", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(
+            "foo/bar: can not find commit " + newbar + " recorded in .gift-refs;"
+            " push it to origin from the clone that made it", e.err[-1])
+
 
 def force_remove(fn):
 
