@@ -1032,6 +1032,7 @@ class TestGift(BaseTest):
             ("ssh://git@github.com/a/b.git", "'ssh://git@github.com/a/b.git'"),
             ("https://u@example.com/a/b.git", "'https://u@example.com/a/b.git'"),
             ("[bar, master]", "['bar', 'master']"),
+            ('"@master"', "'@master'"),
         ]
         for entry, shown in cases:
             fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: " + entry + "\n")

@@ -162,7 +162,7 @@ class Gift(object):
             raise GiftError(usage)
 
         elts = remo.rsplit("@", 1)
-        if len(elts) != 2:
+        if len(elts) != 2 or elts[0] == '':
             raise GiftError(usage)
 
         # An ssh url without a branch splits at "git@"; a branch name has no ":"
