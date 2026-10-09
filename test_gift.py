@@ -870,6 +870,14 @@ class TestGift(BaseTest):
                         ["imsuperman"], cwd=superp)
         self._gitoutput([giftp, "show", ":imsuperman"], ["staged"], cwd=superp)
 
+    def test_commit_sub_skips_sub_tags(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, "tag", "bar-tag", cwd=subbarp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        self._gitoutput([giftp, "tag"], ["bar-tag"], cwd=subbarp)
+        self._gitoutput([giftp, "tag"], [], cwd=superp)
+
     def test_commit_sub_unpushed(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         self._add_file_to_subbar()

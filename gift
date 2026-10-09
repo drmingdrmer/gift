@@ -615,7 +615,9 @@ class Gift(object):
     def _add_sub(self, supertree, sb):
         g = self._g(root=True)
 
-        g.cmdf("fetch", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"], flag=CmdFlag.RAISE)
+        # Without --no-tags, fetch also copies the sub-repo tags that point
+        # into the fetched history
+        g.cmdf("fetch", "--no-tags", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"], flag=CmdFlag.RAISE)
 
         sub_tree = g.tree_of(sb["refhead"], flag=CmdFlag.RAISE)
         supertree = g.tree_add_obj(supertree, sb["dir"], sub_tree)
