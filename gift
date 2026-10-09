@@ -148,6 +148,12 @@ class Gift(object):
         if elts[1] == '' or ':' in elts[1]:
             raise GiftError(usage)
 
+        # "ssh://git@host/path" without a branch splits after the user name,
+        # which leaves a url without a path
+        _, sep, rest = elts[0].partition("://")
+        if sep != '' and '/' not in rest:
+            raise GiftError(usage)
+
         return ["origin", elts[0], elts[1]]
 
     def check_dir(self, subdir):

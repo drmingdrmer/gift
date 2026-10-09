@@ -150,6 +150,17 @@ class TestGiftAPI(BaseTest):
             'upstream': {'branch': 'master', 'name': 'origin', 'url': this_base + '/testdata/bargit'}
         }, sb)
 
+    def test_parse_remote(self):
+        gg = Gift(GitOpt().update({
+            'startpath': [superp],
+            'git_dir': None,
+            'work_tree': None,
+        }))
+
+        # The "@" of a user name is not the one before the branch
+        ups = gg.parse_remote("wiki", "ssh://git@github.com/a/b.wiki.git@master")
+        self.assertEqual(["origin", "ssh://git@github.com/a/b.wiki.git", "master"], ups)
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -975,6 +986,8 @@ class TestGift(BaseTest):
         cases = [
             ("../bargit", "'../bargit'"),
             ("git@github.com:a/b.git", "'git@github.com:a/b.git'"),
+            ("ssh://git@github.com/a/b.git", "'ssh://git@github.com/a/b.git'"),
+            ("https://u@example.com/a/b.git", "'https://u@example.com/a/b.git'"),
             ("[bar, master]", "['bar', 'master']"),
         ]
         for entry, shown in cases:
