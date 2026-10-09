@@ -66,7 +66,7 @@ def _clean_case():
     force_remove(barp)
     cmdx(origit, "reset", "testdata", cwd=this_base)
     cmdx(origit, "checkout", "testdata", cwd=this_base)
-    cmdx(origit, "clean", "-dxf", cwd=this_base)
+    cmdx(origit, "clean", "-dxf", "testdata", cwd=this_base)
 
 
 class BaseTest(unittest.TestCase):
