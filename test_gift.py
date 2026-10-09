@@ -892,6 +892,26 @@ class TestGift(BaseTest):
             "git rev-parse --git-dir",
         ], cmds)
 
+    def test_commit_sub_args(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        cmdx(giftp, *ident_args, "commit", "--sub", "-m", "add subs", cwd=superp)
+        self._gitoutput([giftp, "log", "-1", "--format=%s"], ["add subs"], cwd=superp)
+        head = cmd0(giftp, "rev-parse", "HEAD", cwd=superp)
+
+        _, _, err = cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+        self.assertEqual(["GIFT: nothing to commit: no sub-repo changed"], err)
+        self._gitoutput([giftp, "rev-parse", "HEAD"], [head], cwd=superp)
+
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "commit", "--sub", "--amend", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["commit --sub accepts only -m <msg>, got: --amend"], e.err)
+
 
 def force_remove(fn):
 

@@ -337,7 +337,7 @@ class Gift(object):
                 "gift clone --sub <url>@<branch> <dir>",
                 "    Add a sub-repo to <dir> by clone it from <url>, and checkout <branch>",
                 "",
-                "gift commit --sub",
+                "gift commit --sub [-m <msg>]",
                 "    Add all sub-repo to super-repo and commit",
                 "",
             ]
@@ -493,8 +493,16 @@ class Gift(object):
             self._populate_ref(refs)
 
     def x_commit_sub(self, cmds):
+        args = cmds[1:]
+        msg = "commit subdirs"
+        if len(args) == 2 and args[0] == "-m":
+            msg = args[1]
+        elif args != []:
+            raise GiftError("commit --sub accepts only -m <msg>, got: " + " ".join(args))
+
         g = self._g()
-        supertree = g.tree_of("HEAD", flag='x')
+        headtree = g.tree_of("HEAD", flag='x')
+        supertree = headtree
         parent = g.rev_of("HEAD")
         refs = []
         paths = []
@@ -521,7 +529,11 @@ class Gift(object):
         statehash = g.blob_new(statep, flag='x')
         supertree = g.tree_add_obj(supertree, refsfn, statehash)
 
-        newcommit = g.cmdf("commit-tree", "-p", parent, supertree, input="commit subdirs", flag='x0')
+        if supertree == headtree:
+            display(2, "GIFT: nothing to commit: no sub-repo changed")
+            return
+
+        newcommit = g.cmdf("commit-tree", "-p", parent, supertree, input=msg, flag='x0')
 
         # Keep other staged changes: reset only the paths this commit changed
         g.cmdf("reset", newcommit, "--", statep, *paths, flag='x')
