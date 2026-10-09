@@ -541,6 +541,16 @@ class Gift(object):
         subdir = cmds[2]
         # TODO overwrite existent conf?
 
+        # As git clone does, read <dir> and a relative <url> from the cwd.
+        # .gift holds them relative to the super repo root.
+        subdir = os.path.relpath(pjoin(self.cwd, subdir), self.working_dir)
+        url, sep, branch = remote.rpartition("@")
+        if url.startswith(("./", "../")):
+            url = os.path.relpath(pjoin(self.cwd, url), self.working_dir)
+            if not url.startswith("../"):
+                url = "./" + url
+            remote = url + sep + branch
+
         y = self.read_conf()
         y["dirs"][subdir] = remote
         cont = yaml.dump(y, default_flow_style=False)

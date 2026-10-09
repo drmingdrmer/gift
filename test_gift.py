@@ -577,6 +577,20 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "init", "--sub", cwd=emptyp)
 
+    def test_clone_sub_in_sub_dir(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(origit, "clone", "--bare", bargitp, pjoin(emptyp, "up.git"))
+        dir1 = pjoin(emptyp, "dir1")
+        os.mkdir(dir1)
+
+        # As git clone does, <dir> and a relative <url> are read from the cwd
+        cmdx(giftp, *ident_args, "clone", "--sub", "../../bargit@master", "bar", cwd=dir1)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../up.git@master", "up", cwd=dir1)
+
+        self._fcontent("dirs:\n  dir1/bar: ../bargit@master\n  dir1/up: ./up.git@master\n", emptyp, ".gift")
+        self._fcontent("bar\n", dir1, "bar", "bar")
+        self._fcontent("bar\n", dir1, "up", "bar")
+
     def test_init_sub(self):
         self._nofile(subbarp, "bar")
         self._nofile(subwowp, "wow")
