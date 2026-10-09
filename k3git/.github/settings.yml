@@ -1,6 +1,0 @@
-_extends: gh-config
-
-repository:
-  description: wrapper of git command-line
-  homepage: https://blog.openacid.com
-  topics: git, cli, commandline

@@ -1,3 +1,8 @@
 #!/usr/bin/env pip install -r
 
 PyYAML~=6.0
+k3fs~=0.2.0
+k3git~=0.1.19
+k3handy~=0.1.13
+k3log~=0.1.9
+k3proc~=0.2.18
