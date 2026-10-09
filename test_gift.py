@@ -855,6 +855,23 @@ class TestGift(BaseTest):
         fetched_hash = cmd0(giftp, "rev-parse", "origin/master", cwd=subbarp)
         self.assertEqual(headhash, fetched_hash)
 
+    def test_changed_url(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        # wowgit stands in for a new url of bar
+        wowgitp = pjoin(this_base, "testdata", "wowgit")
+        fwrite(pjoin(superp, ".gift"),
+               "dirs:\n  foo/bar: ../wowgit@master\n  foo/wow: ../wowgit@master\n")
+
+        _, _, err = cmdx(giftp, "status", cwd=subbarp)
+        self.assertEqual(["GIFT: foo/bar: set remote url: origin " + wowgitp], err)
+        self._gitoutput([giftp, "remote", "get-url", "origin"], [wowgitp], cwd=subbarp)
+
+        # A url rewritten by url.<base>.insteadOf is not a change
+        insteadof = "url.file:///other/.insteadOf=" + this_base + "/"
+        _, _, err = cmdx(giftp, "-c", insteadof, "status", cwd=subbarp)
+        self.assertEqual([], err)
+
 
 def force_remove(fn):
 

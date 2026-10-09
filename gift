@@ -249,11 +249,15 @@ class Gift(object):
             dd("gitdir exist:", wtgpath)
 
         g = self._g(sb, bare=True)
-        u = g.remote_get(up["name"])
+        # The url as configured: `git remote get-url` expands url.<base>.insteadOf
+        u = g.cmdf("config", "--get", "remote." + up["name"] + ".url", flag='n0')
         if u is None:
             dd("remote not found, add:", up)
             g.out(2, "add remote:", up["name"], up["url"])
             g.remote_add(up["name"], up["url"], capture=False)
+        elif u != up["url"]:
+            g.out(2, "set remote url:", up["name"], up["url"])
+            g.cmdf("remote", "set-url", up["name"], up["url"], flag='x')
 
         r = g.rev_of(up["name"] + '/' + up["branch"])
         if r is None:
