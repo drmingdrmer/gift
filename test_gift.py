@@ -1802,6 +1802,23 @@ class TestGitSubrepo(unittest.TestCase):
         self.assertEqual(["bar"], cmdout(origit, "show", "HEAD:foo.bar/bar", cwd=self.repo))
         self.assertEqual(["wow"], cmdout(origit, "show", "HEAD:foo-bar/wow", cwd=self.repo))
 
+    def test_failed_merge(self):
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.repo)
+        branch_ref = cmd0(origit, "symbolic-ref", "HEAD", cwd=self.repo)
+
+        # git can not move the branch while its lock file is there
+        fwrite(pjoin(self.repo, ".git", branch_ref + ".lock"), "")
+        wowgitp = pjoin(this_base, "testdata", "wowgit")
+        code, _, _ = self._update("bar " + bargitp + " master\nwow " + wowgitp + " master\n")
+
+        # The fetches finish in any order, and the import stops after the
+        # first dir
+        imported = [d for d in ("bar", "wow") if os.path.exists(pjoin(self.repo, d))]
+
+        self.assertEqual(1, code)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.repo))
+        self.assertIn(imported, (["bar"], ["wow"]))
+
     def test_failed_fetch(self):
         code, _, _ = self._update("bar " + bargitp + " master\nnosuch " + pjoin(self.repo, "nosuch") + " master\n")
         self.assertEqual(1, code)

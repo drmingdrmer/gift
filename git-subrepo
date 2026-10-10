@@ -809,7 +809,12 @@ main()
         ) || die commit
         dd "commit:     $commit"
 
-        git merge --ff-only --no-edit --commit $commit
+        # Stop at a failed merge: the next dir would be imported on a HEAD
+        # without this one
+        if ! git merge --ff-only --no-edit --commit $commit; then
+            remove_local_tags
+            die "merge $prefix"
+        fi
 
     done<".gitsubrepo_refs"
 
