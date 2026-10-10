@@ -618,6 +618,18 @@ class TestGift(BaseTest):
         self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
         self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
 
+        # A dir that is already a sub-repo
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "bar", cwd=emptyp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["clone --sub: bar is already a sub-repo in .gift"], e.err)
+        self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
+
         cmdx(giftp, "init", "--sub", cwd=emptyp)
 
     def test_clone_sub_in_sub_dir(self):

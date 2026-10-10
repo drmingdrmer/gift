@@ -648,11 +648,16 @@ class Gift(object):
 
         remote = cmds[1]
         subdir = cmds[2]
-        # TODO overwrite existent conf?
 
         # As git clone does, read <dir> and a relative <url> from the cwd.
         # .gift holds them relative to the super repo root.
         subdir = os.path.relpath(pjoin(self.cwd, subdir), self.working_dir)
+
+        # The sub git dir would keep the HEAD and the remote refs of the old
+        # url, and the commit below would record that HEAD for the new url
+        if subdir in self.conf["dirs"]:
+            raise GiftError("clone --sub: {} is already a sub-repo in {}".format(subdir, conf_filename))
+
         url, sep, branch = remote.rpartition("@")
         if is_relative_path(url):
             url = os.path.relpath(pjoin(self.cwd, url), self.working_dir)
