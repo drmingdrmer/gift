@@ -1525,6 +1525,16 @@ class TestGitSubrepo(unittest.TestCase):
         self.assertEqual(0, code, err)
         self.assertEqual("bar\n", fread(pjoin(self.repo, "bar", "bar")))
 
+    def test_url_is_data(self):
+        # ${prefix} in a url is the dir
+        code, _, err = self._update("bargit " + pjoin(this_base, "testdata") + "/${prefix} master\n")
+        self.assertEqual(0, code, err)
+        self.assertEqual("bar\n", fread(pjoin(self.repo, "bargit", "bar")))
+
+        # Other shell syntax in a url is not run
+        self._update("dep $(touch${IFS}marker) master\n")
+        self.assertFalse(os.path.exists(pjoin(self.repo, "marker")))
+
 
 def force_remove(fn):
 

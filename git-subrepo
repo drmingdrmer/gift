@@ -714,8 +714,9 @@ main()
             fi
         fi
 
-        # "xpt drmingdrmer/${prefix} master" is translated to "xpt drmingdrmer/xpt master"
-        url=$(eval "echo $url")
+        # "xpt drmingdrmer/${prefix} master" is translated to "xpt drmingdrmer/xpt master".
+        # .gitsubrepo comes with the repo, so the url is data, never shell code.
+        url=${url//'${prefix}'/"$prefix"}
 
         if test "${url%/}" != "$url"; then
             url="${url}$prefix"
