@@ -278,11 +278,18 @@ class Gift(object):
             # Read as an empty .gift, an unreadable one would send a command
             # in a sub-repo dir to the super repo
             raise GiftError("{}: {}".format(conf_filename, e.strerror))
+        except UnicodeDecodeError as e:
+            raise GiftError("{}: {}".format(conf_filename, e))
 
         try:
             conf = yaml.safe_load(content)
         except yaml.MarkedYAMLError as e:
             msg = "{}: line {}: {}".format(conf_filename, e.problem_mark.line + 1, e.problem)
+            raise GiftError(msg)
+        except yaml.reader.ReaderError as e:
+            # A character that yaml does not accept, such as NUL, has no line
+            # mark, only a position
+            msg = "{}: position {}: {}".format(conf_filename, e.position, e.reason)
             raise GiftError(msg)
 
         # An empty .gift, like a missing one, has no sub-repo

@@ -1214,6 +1214,33 @@ class TestGift(BaseTest):
         self.assertEqual(["add super"], out)
         self.assertEqual(["GIFT: warning: .gift: Permission denied"], err)
 
+    def test_undecodable_gift(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        # yaml reports a NUL byte without a line mark, and Python reports a
+        # byte that is not UTF-8 before yaml reads the text
+        cases = [
+            (b"dirs: {}\n\0", ".gift: position 9: special characters are not allowed"),
+            (b"dirs: {}\n# \xff\n", ".gift: 'utf-8' codec can't decode byte 0xff in position 11: invalid start byte"),
+        ]
+        for content, conferr in cases:
+            with open(pjoin(superp, ".gift"), "wb") as f:
+                f.write(content)
+
+            e = None
+            try:
+                cmdx(giftp, "log", "-1", "--format=%s", cwd=subbarp)
+            except CalledProcessError as ee:
+                e = ee
+
+            # Out of a sub-repo dir, a command still runs on the super repo
+            _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
+
+            self.assertEqual(2, e.returncode)
+            self.assertEqual([conferr], e.err)
+            self.assertEqual(["add super"], out)
+            self.assertEqual(["GIFT: warning: " + conferr], err)
+
     def test_checkout_broken_gift(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=superp)
