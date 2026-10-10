@@ -884,6 +884,14 @@ fetch_remote()
     local ref="$3"
     local dir="$4"
 
+    # .gitsubrepo comes with the repo: git must read the url and the ref as
+    # args, never as an option such as --upload-pack=<cmd>
+    case "$url" in
+        -*)
+            die "invalid url: $url"
+            ;;
+    esac
+
     local localtag=refs/tags/_gitsubrepo/$prefix
     # git tag does not allow leading dot. E.g.: "refs/tags/_gitsubrepo/a/.b"
     localtag="${localtag//./-}"
@@ -891,7 +899,7 @@ fetch_remote()
     local mes="$url $ref -> $localtag"
 
     dd "Start fetching $mes"
-    git fetch --no-tags "$url" "$ref:$localtag" || die fetch "$mes"
+    git fetch --no-tags -- "$url" "$ref:$localtag" || die fetch "$mes"
     echo "$prefix $url $ref $localtag" "$dir" >> .gitsubrepo_refs
     dd "Done fetching $mes"
 }

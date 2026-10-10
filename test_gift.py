@@ -1681,6 +1681,22 @@ class TestGitSubrepo(unittest.TestCase):
         self._update("dep $(touch${IFS}marker) master\n")
         self.assertFalse(os.path.exists(pjoin(self.repo, "marker")))
 
+    def test_url_is_not_option(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        markerp = pjoin(tmp.name, "marker")
+        helperp = pjoin(tmp.name, "helper")
+        fwrite(helperp, "#!/bin/sh\ntouch " + markerp + "\nexit 1\n")
+        os.chmod(helperp, 0o755)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.repo)
+
+        # git must not read the url as --upload-pack, which runs the helper
+        code, _, _ = self._update("dep --upload-pack=" + helperp + " " + bargitp + "\n")
+
+        self.assertEqual(1, code)
+        self.assertFalse(os.path.exists(markerp))
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.repo))
+
     def test_failed_fetch(self):
         code, _, _ = self._update("bar " + bargitp + " master\nnosuch " + pjoin(self.repo, "nosuch") + " master\n")
         self.assertEqual(1, code)
