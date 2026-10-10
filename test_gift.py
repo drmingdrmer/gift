@@ -209,6 +209,47 @@ class TestGiftParse(unittest.TestCase):
         got = {relpath: gift.is_outside(relpath) for relpath in cases}
         self.assertEqual(cases, got)
 
+    def test_parse_refs(self):
+        bar = "466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af"
+        wow = "6bf37e52cbafcf55ff4710bb2b63309b55bf8e54"
+        sha256 = "ab" * 32
+        cases = {
+            "": [],
+            "[]\n": [],
+            "- [foo/bar, " + bar + "]\n": [["foo/bar", bar]],
+            # As gift writes it
+            "- - foo/bar\n  - " + bar + "\n- - foo/wow\n  - " + wow + "\n": [["foo/bar", bar], ["foo/wow", wow]],
+            "- [foo/bar, " + sha256 + "]\n": [["foo/bar", sha256]],
+        }
+        got = {content: gift.parse_refs(content) for content in cases}
+        self.assertEqual(cases, got)
+
+        usage = ".gift-refs: expect a list of [<dir>, <commit>], got: "
+        errors = {
+            "42\n": usage + "42",
+            "- foo/bar\n": usage + "'foo/bar'",
+            "- [foo/bar]\n": usage + "['foo/bar']",
+            "- [foo/bar, " + bar + ", x]\n": usage + "['foo/bar', '" + bar + "', 'x']",
+            "- [42, " + bar + "]\n": usage + "[42, '" + bar + "']",
+            "- [foo/bar, 42]\n": usage + "['foo/bar', 42]",
+            # Only a full commit id, which git can not read as an option
+            "- [foo/bar, --hard]\n": usage + "['foo/bar', '--hard']",
+            "- [foo/bar, 466f0bb]\n": usage + "['foo/bar', '466f0bb']",
+            "- [foo/bar, " + bar + "]\n- [foo/bar, " + wow + "]\n": ".gift-refs: dir 'foo/bar' is listed twice",
+        }
+        got = {}
+        for content in errors:
+            with self.assertRaises(gift.GiftError, msg=content) as failure:
+                gift.parse_refs(content)
+            got[content] = str(failure.exception)
+        self.assertEqual(errors, got)
+
+        # yaml describes a syntax error in several lines, after the file name
+        with self.assertRaises(gift.GiftError) as failure:
+            gift.parse_refs("- [foo/bar\n")
+        first_line = str(failure.exception).splitlines()[0]
+        self.assertEqual(".gift-refs: while parsing a flow sequence", first_line)
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -1615,27 +1656,22 @@ class TestGift(BaseTest):
         self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=self.subbarp)
 
     def test_malformed_gift_refs(self):
-        bar_ref = "- [foo/bar, 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af]\n"
+        # test_parse_refs checks each kind of malformed content. This test
+        # checks each state of the repos in which gift reads .gift-refs.
         usage = ".gift-refs: expect a list of [<dir>, <commit>], got: "
-        cases = [
-            ("42\n", usage + "42"),
-            ("- foo/bar\n", usage + "'foo/bar'"),
-            ("- [foo/bar]\n", usage + "['foo/bar']"),
-            ("- [foo/bar, 42]\n", usage + "['foo/bar', 42]"),
-            ("- [foo/bar, --hard]\n", usage + "['foo/bar', '--hard']"),
-            (bar_ref + bar_ref, ".gift-refs: dir 'foo/bar' is listed twice"),
-        ]
-        for content, msg in cases:
-            fwrite(pjoin(self.superp, ".gift-refs"), content)
 
-            with self.assertRaises(CalledProcessError, msg=content) as failure:
-                cmdx(giftp, "init", "--sub", cwd=self.superp)
-            e = failure.exception
+        # A fresh init reads .gift-refs before it checks out a sub-repo
+        fwrite(pjoin(self.superp, ".gift-refs"), "42\n")
 
-            self.assertEqual(2, e.returncode, content)
-            self.assertEqual(msg, e.err[-1], content)
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "init", "--sub", cwd=self.superp)
+        e = failure.exception
 
-        # An empty .gift-refs records no commit
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(usage + "42", e.err[-1])
+
+        # After the user fixes .gift-refs, the same init works. An empty
+        # .gift-refs records no commit.
         fwrite(pjoin(self.superp, ".gift-refs"), "")
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         self._fcontent("bar\n", self.subbarp, "bar")
@@ -1646,6 +1682,14 @@ class TestGift(BaseTest):
         cmdx(origit, *ident_args, "commit", "-m", "bad refs", cwd=self.superp)
         _, _, err = cmdx(giftp, "fetch", "--sub", cwd=self.superp)
         self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:", usage + "42"], err[-2:])
+
+        # With the sub-repos checked out, init --sub still reads .gift-refs
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "init", "--sub", cwd=self.superp)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(usage + "42", e.err[-1])
 
     def test_bad_gift_refs(self):
         fwrite(pjoin(self.superp, ".gift-refs"), "- [foo/bar\n")
