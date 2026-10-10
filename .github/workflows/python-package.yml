@@ -38,10 +38,11 @@ jobs:
         if [ -f packages.txt ]; then cat packages.txt | xargs sudo apt-get install; fi
     - name: Lint with flake8
       run: |
+        # gift has no .py suffix, so `flake8 .` would skip it
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 gift test_gift.py --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 gift test_gift.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       env:
         # interactive command such as k3handy.cmdtty to run git, git complains
@@ -53,10 +54,16 @@ jobs:
         # The tests run gift through its `uv run` shebang: use the matrix Python
         UV_PYTHON: ${{ matrix.python-version }}
       run: |
-        pytest test_gift.py -v
+        pytest test_gift.py -v --basetemp=${{ runner.temp }}/pytest
+    - name: Test pyauto
+      run: |
+        sh pyauto/test/test-pyauto.sh
 
     - uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: test-artifacts-${{ matrix.python-version }}
-        path: test/
+        # pytest keeps the dir of each failed test there, see pytest.ini
+        path: ${{ runner.temp }}/pytest/
+        # The repos in these dirs hold .git, .gift and .gift-refs
+        include-hidden-files: true
