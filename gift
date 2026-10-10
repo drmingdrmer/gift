@@ -225,10 +225,14 @@ class Gift(object):
         try:
             with open(self.confpath, 'r') as f:
                 content = f.read()
-        except OSError:
+        except FileNotFoundError:
             return {
                 "dirs": {}
             }
+        except OSError as e:
+            # Read as an empty .gift, an unreadable one would send a command
+            # in a sub-repo dir to the super repo
+            raise GiftError("{}: {}".format(conf_filename, e.strerror))
 
         try:
             conf = yaml.safe_load(content)

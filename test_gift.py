@@ -1093,6 +1093,29 @@ class TestGift(BaseTest):
         _, _, err = cmdx(giftp, "log", "-1", cwd=superp)
         self.assertEqual(["GIFT: warning: .gift: expect dirs: {<dir>: <url>@<branch>, ...}"], err)
 
+    def test_unreadable_gift(self):
+        if os.geteuid() == 0:
+            self.skipTest("root reads a file without read permission")
+
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        confp = pjoin(superp, ".gift")
+        os.chmod(confp, 0)
+
+        e = None
+        try:
+            cmdx(giftp, "log", "-1", "--format=%s", cwd=subbarp)
+        except CalledProcessError as ee:
+            e = ee
+
+        # Out of a sub-repo dir, a command still runs on the super repo
+        _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=superp)
+        os.chmod(confp, 0o644)
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift: Permission denied"], e.err)
+        self.assertEqual(["add super"], out)
+        self.assertEqual(["GIFT: warning: .gift: Permission denied"], err)
+
     def test_checkout_broken_gift(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
         cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=superp)
