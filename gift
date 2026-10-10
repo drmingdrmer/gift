@@ -15,6 +15,8 @@
 import os
 import sys
 import logging
+from typing import Any
+from typing import TypedDict
 
 import yaml
 
@@ -50,14 +52,14 @@ logger = logging.getLogger(__name__)
 
 
 class GiftError(Exception):
-    def __init__(self, msg):
+    def __init__(self, msg: str) -> None:
         super(GiftError, self).__init__(msg)
         self.returncode = 2
-        self.out = []
+        self.out: list[str] = []
         self.err = [msg]
 
 
-def is_relative_path(url):
+def is_relative_path(url: str) -> bool:
     # git reads a url as a local path if it has no "://" and no ":" before
     # its first "/", as in "host:path". git expands a leading "~" itself.
     if url == "" or "://" in url:
@@ -72,6 +74,22 @@ def is_relative_path(url):
     return not os.path.isabs(url) and not url.startswith("~")
 
 
+class Upstream(TypedDict):
+    name: str
+    url: str
+    branch: str
+
+
+class SubRepoConf(TypedDict):
+    # One sub-repo entry of .gift, as Gift.parse() expands it
+    dir: str
+    upstream: Upstream
+    refhead: str
+    sub_gitdir: str
+    env: dict[str, str]
+    bareenv: dict[str, str]
+
+
 class Gift(object):
     """
     """
@@ -79,7 +97,7 @@ class Gift(object):
     # inside gitdir:
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
-    def __init__(self, opt):
+    def __init__(self, opt: GitOpt) -> None:
         self.gitopt = opt.clone()
         if self.gitopt.opt.get('exec_path') is None:
             self.gitpath = 'git'
@@ -114,7 +132,7 @@ class Gift(object):
         # A repo named by the user is used even in a sub-repo dir
         self.repo_named = git_dir is not None or work_tree is not None
 
-    def init_git_config(self):
+    def init_git_config(self) -> None:
 
         git_dir_specified = self.git_dir is not None
 
@@ -156,7 +174,7 @@ class Gift(object):
         self.confpath = self.working_dir + '/' + conffn
         self.conf = self.parse()
 
-    def parse_remote(self, subdir, remo):
+    def parse_remote(self, subdir: str, remo: object) -> list[str]:
         usage = "{}: {}: expect <url>@<branch>, got: {!r}".format(conffn, subdir, remo)
         if not isinstance(remo, str):
             raise GiftError(usage)
@@ -177,7 +195,7 @@ class Gift(object):
 
         return ["origin", elts[0], elts[1]]
 
-    def check_dir(self, subdir):
+    def check_dir(self, subdir: object) -> None:
         # .gift comes with the repo, so a dir in it must not lead the sub-repo
         # checkout out of the work tree or into a git dir
         msg = "{}: {!r}: expect a dir inside the work tree and outside .git".format(conffn, subdir)
@@ -193,7 +211,7 @@ class Gift(object):
         if rel == '.' or parts[0] == '..' or '.git' in parts:
             raise GiftError(msg)
 
-    def read_conf(self):
+    def read_conf(self) -> dict[str, Any]:
         try:
             with open(self.confpath, 'r') as f:
                 cont = f.read()
@@ -219,7 +237,7 @@ class Gift(object):
 
         return yml
 
-    def parse(self):
+    def parse(self) -> dict[str, Any]:
 
         yml = self.read_conf()
 
@@ -237,7 +255,7 @@ class Gift(object):
                 url = os.path.normpath(pjoin(self.working_dir, url))
 
             sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
-            dirs[k] = {
+            sb: SubRepoConf = {
                 "dir": k,
                 "upstream": {
                     "name": ups[0],
@@ -255,10 +273,11 @@ class Gift(object):
                     "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
                 },
             }
+            dirs[k] = sb
 
         return yml
 
-    def _g(self, what="", bare=False, root=False):
+    def _g(self, what: str | SubRepoConf = "", bare: bool = False, root: bool = False) -> Git:
         if what == '':
             if root:
                 # Tree objects hold paths from the work-tree root, but k3git's
@@ -305,11 +324,11 @@ class Gift(object):
                 ctxmsg='GIFT: ' + sb['dir'],
             )
 
-    def check_worktree(self, sb):
+    def check_worktree(self, sb: SubRepoConf) -> None:
         self.try_init_sub_git(sb)
         self.try_init_sub_worktree(sb)
 
-    def try_init_sub_git(self, sb):
+    def try_init_sub_git(self, sb: SubRepoConf) -> None:
 
         wtgpath = pjoin(self.git_dir, sb["sub_gitdir"])
 
@@ -344,7 +363,7 @@ class Gift(object):
             g.out(2, "fetch", up["name"], up["url"])
             g.fetch(up["name"], flag=CMD_RAISE_PASS)
 
-    def try_init_sub_worktree(self, sb):
+    def try_init_sub_worktree(self, sb: SubRepoConf) -> None:
 
         path = sb['env']["GIT_WORK_TREE"]
         if not os.path.isdir(path):
@@ -377,7 +396,7 @@ class Gift(object):
 
         self.try_switch_branch(g, sb)
 
-    def try_switch_branch(self, g, sb):
+    def try_switch_branch(self, g: Git, sb: SubRepoConf) -> None:
         # gift.branch is the .gift branch that the sub-repo was last set to.
         # A changed .gift branch moves the sub-repo once, so a branch that the
         # user checks out later stays.
@@ -403,7 +422,7 @@ class Gift(object):
 
         g.cmdf("config", "gift.branch", branch, flag=CmdFlag.RAISE)
 
-    def get_subrepo_config(self, subdir):
+    def get_subrepo_config(self, subdir: str) -> tuple[str, SubRepoConf | None]:
 
         # TODO test subdir not in working_dir?
         working_dir = self.working_dir
@@ -429,7 +448,7 @@ class Gift(object):
         else:
             return '', None
 
-    def in_sub_repo_dir(self):
+    def in_sub_repo_dir(self) -> bool:
         # Without .gift, a sub git dir tells that a dir is a sub-repo
         rel = os.path.relpath(self.cwd, self.working_dir)
         if rel.startswith('..'):
@@ -443,7 +462,7 @@ class Gift(object):
 
         return False
 
-    def exec_informative_cmd(self, cmds):
+    def exec_informative_cmd(self, cmds: list[str]) -> None:
         cmd = cmds[0]
         if cmd == '--version':
             display(1, "gift version " + version)
@@ -471,7 +490,7 @@ class Gift(object):
                      ):
             self._g().cmdf(cmd, flag=CMD_RAISE_PASS)
 
-    def cmd(self, cmds):
+    def cmd(self, cmds: list[str]) -> None:
 
         dd("gift cmd:", cmds)
 
@@ -566,7 +585,7 @@ class Gift(object):
                 display(2, "GIFT: warning: " + str(e))
             self._populate_ref(refs1)
 
-    def _arg_param(self, cmds):
+    def _arg_param(self, cmds: list[str]) -> tuple[str, bool, list[str]]:
 
         cmd = cmds[0]
         cmds = cmds[1:]
@@ -583,7 +602,7 @@ class Gift(object):
 
         return cmd, issub, [cmd] + cmds
 
-    def _get_head_refs(self, warn):
+    def _get_head_refs(self, warn: bool) -> list[list[str]] | None:
         # Sub-repo config is not loaded in a git-dir, and without .gift there
         # is no sub-repo: skip the git process
         if self.in_git_dir or not os.path.isfile(self.confpath):
@@ -603,7 +622,7 @@ class Gift(object):
                 display(2, ["GIFT: can not parse " + refsfn + " in HEAD:", str(e)])
             return None
 
-    def x_clone_sub(self, cmds):
+    def x_clone_sub(self, cmds: list[str]) -> None:
 
         # TODO test remove is gift clone --sub ssh://git@github.com/openacid/celeritasdb.wiki wiki
         # there is a "@" in it.
@@ -655,12 +674,12 @@ class Gift(object):
         self.x_init_sub([])
         self.x_commit_sub([])
 
-    def check_no_args(self, cmds):
+    def check_no_args(self, cmds: list[str]) -> None:
         args = cmds[1:]
         if args != []:
             raise GiftError(cmds[0] + " --sub accepts no argument, got: " + " ".join(args))
 
-    def x_init_sub(self, cmds):
+    def x_init_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
@@ -675,7 +694,7 @@ class Gift(object):
             refs = yaml.safe_load(cont)
             self._populate_ref(refs)
 
-    def x_commit_sub(self, cmds):
+    def x_commit_sub(self, cmds: list[str]) -> None:
         args = cmds[1:]
         msg = "commit subdirs"
         if len(args) == 2 and args[0] == "-m":
@@ -724,7 +743,7 @@ class Gift(object):
 
         self._populate_ref(refs)
 
-    def x_fetch_sub(self, cmds):
+    def x_fetch_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         for sub in self.conf["dirs"]:
             sb = self.conf["dirs"][sub]
@@ -737,7 +756,7 @@ class Gift(object):
         if refs is not None:
             self._populate_ref(refs)
 
-    def x_merge_sub(self, cmds):
+    def x_merge_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         # only ff-only allowed
         for sub in self.conf["dirs"]:
@@ -746,7 +765,7 @@ class Gift(object):
             _, out, err = cmdx(self.gitpath, "merge", "--ff-only", env=sb["env"])
             display(out, err)
 
-    def x_reset_sub(self, cmds):
+    def x_reset_sub(self, cmds: list[str]) -> None:
         candidate_args = ['--soft',
                           '--mixed',
                           '-N',
@@ -771,7 +790,7 @@ class Gift(object):
             _, out, err = cmdx(self.gitpath, "reset", *args, superref, env=sb["env"])
             display(out, err)
 
-    def _populate_ref(self, refs):
+    def _populate_ref(self, refs: list[list[str]]) -> None:
 
         for subdir, hsh in refs:
             sb = self.conf["dirs"].get(subdir)
@@ -789,7 +808,7 @@ class Gift(object):
                 g.out(2, "can not update", superref, "to", hsh)
                 display(e.out, e.err)
 
-    def _add_sub(self, supertree, sb):
+    def _add_sub(self, supertree: str, sb: SubRepoConf) -> tuple[str, str]:
         g = self._g(root=True)
 
         # Without --no-tags, fetch also copies the sub-repo tags that point
@@ -802,7 +821,7 @@ class Gift(object):
         return supertree, g.rev_of(sb["refhead"])
 
 
-def git_args():
+def git_args() -> tuple[GitOpt, int, list[str]]:
     args = sys.argv[1:]
 
     gitopt = GitOpt().parse_args(args, {'--gift-verbose': True})
