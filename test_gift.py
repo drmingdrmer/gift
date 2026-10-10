@@ -195,6 +195,17 @@ class TestGiftAPI(BaseTest):
         got = {url: gift.is_relative_path(url) for url in cases}
         self.assertEqual(cases, got)
 
+    def test_join_opt_values(self):
+        # The args of the command, after "log", stay as they are
+        args = ["-C", "d", "--git-dir", "g", "-c", "a=b", "--work-tree", "w", "--namespace", "n",
+                "--super-prefix", "s", "-p", "log", "--git-dir", "x"]
+        want = ["-C", "d", "--git-dir=g", "-c", "a=b", "--work-tree=w", "--namespace=n",
+                "--super-prefix=s", "-p", "log", "--git-dir", "x"]
+        self.assertEqual(want, gift.join_opt_values(args))
+
+        # Without a value, git reports the option
+        self.assertEqual(["--git-dir"], gift.join_opt_values(["--git-dir"]))
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -978,6 +989,23 @@ class TestGift(BaseTest):
         _, out, err = cmdx(giftp, *named, "log", "-1", "--format=%s", cwd=subbarp)
         self.assertEqual(["add super"], out)
         self.assertEqual(["GIFT: warning: .gift: expect dirs: {<dir>: <url>@<branch>, ...}"], err)
+
+    def test_named_git_dir_forms_in_sub(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        fwrite(pjoin(subbarp, "bar"), "edited\n")
+
+        # git reads both forms of --git-dir, and bargit is bare: it has no
+        # work tree to reset, and foo/bar is not its work tree
+        for named in (["--git-dir", bargitp], ["--git-dir=" + bargitp]):
+            with self.assertRaises(CalledProcessError) as git_failure:
+                cmdx(origit, *named, "reset", "--hard", cwd=subbarp)
+
+            with self.assertRaises(CalledProcessError) as gift_failure:
+                cmdx(giftp, *named, "reset", "--hard", cwd=subbarp)
+
+            self.assertEqual(git_failure.exception.returncode, gift_failure.exception.returncode, named)
+            self.assertEqual(git_failure.exception.err, gift_failure.exception.err, named)
+            self._fcontent("edited\n", subbarp, "bar")
 
     def test_populate_super_ref(self):
 

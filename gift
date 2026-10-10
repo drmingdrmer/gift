@@ -927,8 +927,29 @@ class Gift(object):
         return super_tree, super_git.rev_of(subrepo["refhead"])
 
 
+def join_opt_values(args: list[str]) -> list[str]:
+    # git reads "--git-dir <path>" as "--git-dir=<path>", but GitOpt reads only
+    # the second form. It would leave the first in the command, so gift would
+    # pick the sub-repo of the cwd, and git would mix the named git dir with
+    # the work tree of that sub-repo.
+    args = list(args)
+    joined = []
+
+    # The git options end at the command, the first arg without a leading "-"
+    while len(args) > 1 and args[0].startswith("-"):
+        arg = args.pop(0)
+        if arg in ("-C", "-c"):
+            joined += [arg, args.pop(0)]
+        elif arg in ("--git-dir", "--work-tree", "--namespace", "--super-prefix"):
+            joined.append(arg + "=" + args.pop(0))
+        else:
+            joined.append(arg)
+
+    return joined + args
+
+
 def parse_argv() -> tuple[GitOpt, int, list[str]]:
-    args = sys.argv[1:]
+    args = join_opt_values(sys.argv[1:])
 
     gitopt = GitOpt().parse_args(args, {'--gift-verbose': True})
 
