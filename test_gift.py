@@ -1535,6 +1535,14 @@ class TestGitSubrepo(unittest.TestCase):
         self._update("dep $(touch${IFS}marker) master\n")
         self.assertFalse(os.path.exists(pjoin(self.repo, "marker")))
 
+    def test_failed_fetch(self):
+        code, _, _ = self._update("bar " + bargitp + " master\nnosuch " + pjoin(self.repo, "nosuch") + " master\n")
+        self.assertEqual(1, code)
+
+        # bar is not imported, and its fetched tag is removed
+        self.assertFalse(os.path.exists(pjoin(self.repo, "bar")))
+        self.assertEqual([], cmdout(origit, "for-each-ref", "refs/tags", cwd=self.repo))
+
 
 def force_remove(fn):
 

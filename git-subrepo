@@ -663,6 +663,7 @@ main()
     local url=
     local ref=
     local localtag=
+    local pids=
     while read a b c d; do
 
         if [ "x$a" = "x" ] || [ "${a:0:1}" = "#" ]; then
@@ -728,9 +729,21 @@ main()
         fi
 
         fetch_remote "$base$prefix" "$url" "$ref" "$dir" &
+        pids="$pids $!"
 
     done<"$conf_fn"
-    wait
+
+    # A bare "wait" returns 0 even after a failed fetch. Check each fetch,
+    # and import nothing if one failed.
+    local pid
+    local failed=0
+    for pid in $pids; do
+        wait $pid || failed=1
+    done
+    if [ "$failed" = "1" ]; then
+        remove_local_tags
+        die "failed to fetch a sub repo"
+    fi
 
     while read prefix url ref localtag dir; do
 
@@ -800,6 +813,11 @@ main()
 
     done<".gitsubrepo_refs"
 
+    remove_local_tags
+}
+
+remove_local_tags()
+{
     while read a b c localtag dir; do
         dd $a, $b, $c, $localtag, $dir
         git update-ref -d $localtag
