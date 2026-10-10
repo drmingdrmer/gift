@@ -333,7 +333,9 @@ class Gift(object):
 
             # A dir may hold what a ref name can not, such as " " or a
             # leading ".". quote() keeps "." and "~", so they are quoted after.
-            ref_name = urllib.parse.quote(subdir)
+            # "/" is quoted too: the ref of a dropped "dep" would leave no
+            # room for that of "dep/child".
+            ref_name = urllib.parse.quote(subdir, safe="")
             ref_name = ref_name.replace(".", "%2E").replace("~", "%7E")
 
             sub_gitdir = self.sub_gitdir_fmt.format(dir=subdir)

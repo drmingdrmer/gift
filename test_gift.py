@@ -160,7 +160,7 @@ class TestGiftAPI(BaseTest):
             'dir': 'foo/bar',
             'env': {'GIT_DIR': this_base + '/testdata/supergit/gift/subdir/foo/bar',
                     'GIT_WORK_TREE': this_base + '/testdata/super/foo/bar'},
-            'refhead': 'refs/gift/sub/foo/bar',
+            'refhead': 'refs/gift/sub/foo%2Fbar',
             'sub_gitdir': 'gift/subdir/foo/bar',
             'upstream': {'branch': 'master', 'name': 'origin', 'url': this_base + '/testdata/bargit'}
         }, sb)
@@ -734,6 +734,22 @@ class TestGift(BaseTest):
         self._fcontent("wow\n", emptyp, "bar", "wow")
         self._fcontent("- - bar\n  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54\n", emptyp, ".gift-refs")
         self.assertEqual(["[]"], added_refs)
+
+    def test_clone_sub_in_dropped_dir(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=emptyp)
+
+        # Dropped from .gift, dep keeps its ref in the super repo
+        fwrite(pjoin(emptyp, ".gift"), "dirs: {}\n")
+        cmdx(origit, *ident_args, "commit", "-m", "drop dep", ".gift", cwd=emptyp)
+
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "dep/child", cwd=emptyp)
+        tree = cmdout(origit, "ls-tree", "-r", "--name-only", "HEAD", cwd=emptyp)
+
+        self._fcontent("dirs:\n  dep/child: ../wowgit@master\n", emptyp, ".gift")
+        self._fcontent("- - dep/child\n  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54\n", emptyp, ".gift-refs")
+        self.assertEqual([".gift", ".gift-refs", "dep/bar", "dep/child/wow"], tree)
+        self.assertEqual(["wow"], cmdout(origit, "show", "HEAD:dep/child/wow", cwd=emptyp))
 
     def test_clone_sub_in_sub_dir(self):
         cmdx(giftp, "init", cwd=emptyp)
@@ -1392,7 +1408,7 @@ class TestGift(BaseTest):
         self._gitoutput([giftp, "ls-tree", "-r", "--name-only", "HEAD"],
                         [".dot/x/wow", ".gift", ".gift-refs", "imsuperman", "my dep/bar"], cwd=superp)
         self._gitoutput([origit, "for-each-ref", "--format=%(refname)", "refs/gift/sub"],
-                        ["refs/gift/sub/%2Edot/x", "refs/gift/sub/my%20dep"], cwd=superp)
+                        ["refs/gift/sub/%2Edot%2Fx", "refs/gift/sub/my%20dep"], cwd=superp)
 
     def test_gift_dir_with_git_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
