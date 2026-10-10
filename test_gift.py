@@ -432,11 +432,9 @@ class TestGiftDelegate(BaseTest):
 
         # A git command, an informative command, and no command
         for cmds in (["status"], ["--version"], []):
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=cmds) as failure:
                 cmdx(giftp, '-C', "nosuchdir", *cmds, cwd=self.superp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(128, e.returncode, cmds)
             self.assertEqual([], e.out, cmds)
@@ -448,11 +446,9 @@ class TestGiftDelegate(BaseTest):
         self.assertEqual(['add bar'], out)
 
     def test_error_output(self):
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "abc")
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(1, e.returncode)
         self.assertEqual([], e.out)
@@ -464,11 +460,9 @@ class TestGiftDelegate(BaseTest):
         self.assertNotIn('Traceback', "".join(e.err))
 
     def test_no_cmd(self):
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(1, e.returncode)
         self.assertIn("usage: git", e.out[0], "stderr output git help")
@@ -526,22 +520,22 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "log", "-n1", cwd=self.supergitp)
 
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "commit", "--sub", cwd=self.supergitp)
-        except CalledProcessError as e:
-            self.assertEqual(2, e.returncode)
-            self.assertEqual([], e.out)
-            self.assertEqual(
-                ["--sub can not be used in git-dir:" + self.supergitp], e.err)
+        e = failure.exception
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([], e.out)
+        self.assertEqual(
+            ["--sub can not be used in git-dir:" + self.supergitp], e.err)
 
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "status", cwd=self.supergitp)
-        except CalledProcessError as e:
-            self.assertEqual(128, e.returncode)
-            self.assertEqual([], e.out)
-            self.assertEqual([
-                'fatal: this operation must be run in a work tree'
-            ], e.err)
+        e = failure.exception
+        self.assertEqual(128, e.returncode)
+        self.assertEqual([], e.out)
+        self.assertEqual([
+            'fatal: this operation must be run in a work tree'
+        ], e.err)
 
     # def test_no_gift_file(self):
     #     workdir = emptyp
@@ -609,11 +603,9 @@ class TestGift(BaseTest):
         bad_gitdir = pjoin(self.emptyp, ".git", "gift", "subdir", "bad")
 
         # A bad url, before any .gift exists
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "clone", "--sub", "../nosuch@master", "bad", cwd=self.emptyp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(128, e.returncode)
         self.assertFalse(os.path.exists(confp))
@@ -624,11 +616,9 @@ class TestGift(BaseTest):
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
         head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@nosuch", "bad", cwd=self.emptyp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(1, e.returncode)
         self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
@@ -636,11 +626,9 @@ class TestGift(BaseTest):
         self.assertFalse(os.path.exists(bad_gitdir))
 
         # A dir that is already a sub-repo
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "bar", cwd=self.emptyp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
         self.assertEqual(["clone --sub: bar is already a sub-repo in .gift"], e.err)
@@ -686,11 +674,9 @@ class TestGift(BaseTest):
         cmdx(origit, *ident_args, "commit", "-m", "drop bar", ".gift", cwd=self.emptyp)
         head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "bar", cwd=self.emptyp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         bar_gitdir = pjoin(self.emptyp, ".git", "gift", "subdir", "bar")
         self.assertEqual(2, e.returncode)
@@ -705,11 +691,9 @@ class TestGift(BaseTest):
         # commit for bar. A failed clone keeps that entry.
         force_remove(bar_gitdir)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@nosuch", "bar", cwd=self.emptyp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(1, e.returncode)
         self._fcontent("- - bar\n  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af\n", self.emptyp, ".gift-refs")
@@ -915,11 +899,9 @@ class TestGift(BaseTest):
         headhash = cmd0(origit, "rev-parse", "HEAD", cwd=self.barp)
         fwrite(pjoin(self.superp, ".gift-refs"), "- - foo/bar\n  - " + headhash + "\n")
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "init", "--sub", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
 
@@ -932,11 +914,9 @@ class TestGift(BaseTest):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
 
         # The sub-repo remotes are local paths, which this option forbids
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "-c", "protocol.file.allow=never", "fetch", "--sub", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(128, e.returncode)
         self.assertEqual(["fatal: transport 'file' not allowed"], e.err)
@@ -1041,10 +1021,10 @@ class TestGift(BaseTest):
         # git reads both forms of --git-dir, and bargit is bare: it has no
         # work tree to reset, and foo/bar is not its work tree
         for named in (["--git-dir", self.bargitp], ["--git-dir=" + self.bargitp]):
-            with self.assertRaises(CalledProcessError) as git_failure:
+            with self.assertRaises(CalledProcessError, msg=named) as git_failure:
                 cmdx(origit, *named, "reset", "--hard", cwd=self.subbarp)
 
-            with self.assertRaises(CalledProcessError) as gift_failure:
+            with self.assertRaises(CalledProcessError, msg=named) as gift_failure:
                 cmdx(giftp, *named, "reset", "--hard", cwd=self.subbarp)
 
             self.assertEqual(git_failure.exception.returncode, gift_failure.exception.returncode, named)
@@ -1170,11 +1150,9 @@ class TestGift(BaseTest):
         self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", aaa_head)
 
     def test_unsupported_sub(self):
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "push", "--sub", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
         self.assertEqual([], e.out)
@@ -1213,11 +1191,9 @@ class TestGift(BaseTest):
         # A fresh clone has no git dir for bar, and origin has no newbar
         force_remove(pjoin(self.supergitp, "gift", "subdir", "foo", "bar"))
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "init", "--sub", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
         self.assertEqual(
@@ -1251,22 +1227,18 @@ class TestGift(BaseTest):
             fwrite(pjoin(self.superp, ".gift"), "dirs:\n  foo/bar: ../bargit@master\n  " + branch + ": ../bargit@master\n")
             cmdx(origit, *ident_args, "commit", "-m", branch, ".gift", cwd=self.superp)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(origit, *ident_args, "-c", "merge.conflictStyle=merge", "merge", "b1", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
         self.assertEqual(1, e.returncode)
 
         conferr = ".gift: line 4: could not find expected ':'"
 
         # A --sub command, or a command in a sub-repo dir, still fails
         for cmds, cwd in ((["commit", "--sub"], self.superp), (["status"], self.subbarp)):
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=cmds) as failure:
                 cmdx(giftp, *cmds, cwd=cwd)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, cmds)
             self.assertEqual([conferr], e.err, cmds)
@@ -1300,11 +1272,9 @@ class TestGift(BaseTest):
         confp = pjoin(self.superp, ".gift")
         os.chmod(confp, 0)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "log", "-1", "--format=%s", cwd=self.subbarp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         # Out of a sub-repo dir, a command still runs on the super repo
         _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=self.superp)
@@ -1328,11 +1298,9 @@ class TestGift(BaseTest):
             with open(pjoin(self.superp, ".gift"), "wb") as f:
                 f.write(content)
 
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=content) as failure:
                 cmdx(giftp, "log", "-1", "--format=%s", cwd=self.subbarp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             # Out of a sub-repo dir, a command still runs on the super repo
             _, out, err = cmdx(giftp, "log", "-1", "--format=%s", cwd=self.superp)
@@ -1375,11 +1343,9 @@ class TestGift(BaseTest):
         for d in ("../x", "/x", "a/../../x", "up/x", ".", ".git/x", ".GIT/x", "a/.git"):
             fwrite(pjoin(self.superp, ".gift"), "dirs:\n  " + d + ": ../bargit@master\n")
 
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=d) as failure:
                 cmdx(giftp, "init", "--sub", cwd=self.superp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, d)
             self.assertEqual([".gift: '" + d + "': expect a dir inside the work tree and outside .git"], e.err, d)
@@ -1407,11 +1373,9 @@ class TestGift(BaseTest):
         for d in ("x", "x/admin", "x/admin/sub"):
             fwrite(pjoin(tmpdir, ".gift"), "dirs:\n  " + d + ": " + self.bargitp + "@master\n")
 
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=d) as failure:
                 cmdx(giftp, "init", "--sub", cwd=tmpdir)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, d)
             self.assertEqual([".gift: '" + d + "': expect a dir inside the work tree and outside .git"], e.err, d)
@@ -1430,11 +1394,9 @@ class TestGift(BaseTest):
         for d in ("link/../../x", "link", pjoin(self.superp, "foo", "bar")):
             fwrite(pjoin(self.superp, ".gift"), "dirs:\n  " + d + ": ../bargit@master\n")
 
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=d) as failure:
                 cmdx(giftp, "init", "--sub", cwd=self.superp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, d)
             self.assertEqual([".gift: '" + d + "': expect a relative path without symlinks"], e.err, d)
@@ -1449,11 +1411,9 @@ class TestGift(BaseTest):
 
         fwrite(pjoin(self.superp, ".gift"), "dirs:\n  foo/bar: ../bargit@master\n  ./foo/bar: ../wowgit@master\n")
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, "init", "--sub", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
         self.assertEqual([".gift: './foo/bar': dir 'foo/bar' is listed twice"], e.err)
@@ -1466,7 +1426,7 @@ class TestGift(BaseTest):
                      "dirs:\n  dep/x/nested: ../wowgit@master\n  dep: ../bargit@master\n"):
             fwrite(pjoin(self.superp, ".gift"), conf)
 
-            with self.assertRaises(CalledProcessError) as failure:
+            with self.assertRaises(CalledProcessError, msg=conf) as failure:
                 cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
 
             self.assertEqual(2, failure.exception.returncode, conf)
@@ -1607,11 +1567,9 @@ class TestGift(BaseTest):
         self.assertEqual(["GIFT: nothing to commit: no sub-repo changed"], err)
         self._gitoutput([giftp, "rev-parse", "HEAD"], [head], cwd=self.superp)
 
-        e = None
-        try:
+        with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "commit", "--sub", "--amend", cwd=self.superp)
-        except CalledProcessError as ee:
-            e = ee
+        e = failure.exception
 
         self.assertEqual(2, e.returncode)
         self.assertEqual(["commit --sub accepts only -m <msg>, got: --amend"], e.err)
@@ -1631,11 +1589,9 @@ class TestGift(BaseTest):
             (["clone", "--sub", "../bargit@master"], "usage: gift clone --sub <url>@<branch> <dir>"),
         ]
         for cmds, msg in cases:
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=cmds) as failure:
                 cmdx(giftp, *cmds, cwd=self.superp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, cmds)
             self.assertEqual([msg], e.err, cmds)
@@ -1672,11 +1628,9 @@ class TestGift(BaseTest):
         for content, msg in cases:
             fwrite(pjoin(self.superp, ".gift-refs"), content)
 
-            e = None
-            try:
+            with self.assertRaises(CalledProcessError, msg=content) as failure:
                 cmdx(giftp, "init", "--sub", cwd=self.superp)
-            except CalledProcessError as ee:
-                e = ee
+            e = failure.exception
 
             self.assertEqual(2, e.returncode, content)
             self.assertEqual(msg, e.err[-1], content)
@@ -1715,7 +1669,7 @@ class TestGift(BaseTest):
         for cmds in (["init", "--sub"], ["fetch", "--sub"], ["clone", "--sub", "../wowgit@master", "wow"]):
             force_remove(pjoin(self.supergitp, "gift"))
 
-            with self.assertRaises(CalledProcessError) as failure:
+            with self.assertRaises(CalledProcessError, msg=cmds) as failure:
                 cmdx(giftp, *ident_args, *cmds, cwd=self.superp)
             err = failure.exception.err
 
