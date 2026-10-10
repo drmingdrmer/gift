@@ -1717,6 +1717,29 @@ class TestGift(BaseTest):
         gift_lines = [line for line in err if line.startswith("GIFT: ")]
         self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:"], gift_lines)
 
+    def test_undecodable_gift_refs(self):
+        refsp = pjoin(superp, ".gift-refs")
+        with open(refsp, "wb") as f:
+            f.write(b"\xff\n")
+        refserr = ".gift-refs: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+
+        # Each command reads .gift-refs, for a sub-repo without a git dir
+        for cmds in (["init", "--sub"], ["fetch", "--sub"], ["clone", "--sub", "../wowgit@master", "wow"]):
+            force_remove(pjoin(supergitp, "gift"))
+
+            with self.assertRaises(CalledProcessError) as failure:
+                cmdx(giftp, *ident_args, *cmds, cwd=superp)
+            err = failure.exception.err
+
+            self.assertEqual(2, failure.exception.returncode, cmds)
+            self.assertEqual(refserr, err[-1], cmds)
+            self.assertEqual([], [line for line in err if "Traceback" in line], cmds)
+
+        # The file stays as it is, for the user to fix
+        with open(refsp, "rb") as f:
+            content = f.read()
+        self.assertEqual(b"\xff\n", content)
+
 
 class TestGitSubrepo(unittest.TestCase):
 

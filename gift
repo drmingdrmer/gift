@@ -83,6 +83,20 @@ def is_outside(relpath: str) -> bool:
     return relpath == os.pardir or relpath.startswith(os.pardir + os.sep)
 
 
+def read_text(path: str, name: str) -> str | None:
+    # None for a missing file. A file that can not be read or decoded is an
+    # error that names it, not a traceback.
+    try:
+        with open(path, 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise GiftError("{}: {}".format(name, e.strerror))
+    except UnicodeDecodeError as e:
+        raise GiftError("{}: {}".format(name, e))
+
+
 def parse_refs(content: str) -> list[list[str]]:
     # .gift-refs comes with the repo, and its commits go to git as args
     try:
@@ -273,19 +287,13 @@ class Gift(object):
         return relpath
 
     def read_conf(self) -> dict[str, Any]:
-        try:
-            with open(self.confpath, 'r') as f:
-                content = f.read()
-        except FileNotFoundError:
+        # Read as an empty .gift, an unreadable one would send a command in a
+        # sub-repo dir to the super repo
+        content = read_text(self.confpath, conf_filename)
+        if content is None:
             return {
                 "dirs": {}
             }
-        except OSError as e:
-            # Read as an empty .gift, an unreadable one would send a command
-            # in a sub-repo dir to the super repo
-            raise GiftError("{}: {}".format(conf_filename, e.strerror))
-        except UnicodeDecodeError as e:
-            raise GiftError("{}: {}".format(conf_filename, e))
 
         try:
             conf = yaml.safe_load(content)
@@ -308,6 +316,13 @@ class Gift(object):
             raise GiftError(conf_filename + ": expect dirs: {<dir>: <url>@<branch>, ...}")
 
         return conf
+
+    def read_refs(self) -> list[list[str]]:
+        # The commits that .gift-refs in the work tree records
+        content = read_text(pjoin(self.working_dir, refs_filename), refs_filename)
+        if content is None:
+            return []
+        return parse_refs(content)
 
     def parse_conf(self) -> dict[str, Any]:
 
@@ -465,12 +480,7 @@ class Gift(object):
 
             # If .gift-refs records a commit for this dir, the super repo has
             # already checked out its files: adopt it and keep the files.
-            refs = []
-            refs_path = pjoin(self.working_dir, refs_filename)
-            if os.path.isfile(refs_path):
-                content = fread(refs_path)
-                refs = parse_refs(content)
-
+            refs = self.read_refs()
             recorded = dict(refs).get(subrepo['dir'])
             if recorded is None:
                 sub_git.checkout(upstream["branch"])
@@ -760,10 +770,9 @@ class Gift(object):
         # after <dir> is dropped from .gift. The new url may not have it, so
         # the clone drops the entry, and the sub-repo checks out <branch>.
         refs = []
-        old_refs_content = None
         refs_path = pjoin(self.working_dir, refs_filename)
-        if os.path.isfile(refs_path):
-            old_refs_content = fread(refs_path)
+        old_refs_content = read_text(refs_path, refs_filename)
+        if old_refs_content is not None:
             refs = parse_refs(old_refs_content)
         kept_refs = [pair for pair in refs if pair[0] != subdir]
 
@@ -823,14 +832,8 @@ class Gift(object):
         for subrepo in self.conf["dirs"].values():
             self.check_worktree(subrepo)
 
-        try:
-            content = fread(pjoin(self.working_dir, refs_filename))
-        except IOError:
-            # TODO message
-            pass
-        else:
-            refs = parse_refs(content)
-            self._update_super_head_refs(refs)
+        refs = self.read_refs()
+        self._update_super_head_refs(refs)
 
     def x_commit_sub(self, cmds: list[str]) -> None:
         args = cmds[1:]
