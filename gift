@@ -359,6 +359,15 @@ class Gift(object):
             }
             conf["dirs"][subdir] = subrepo
 
+        # A sub-repo inside another would share its work tree and its sub git
+        # dir. Path parts are compared, so "dependency" is not inside "dep".
+        for subdir in conf["dirs"]:
+            parent = os.path.dirname(subdir)
+            while parent != '':
+                if parent in conf["dirs"]:
+                    raise GiftError("{}: {!r} is inside sub-repo dir {!r}".format(conf_filename, subdir, parent))
+                parent = os.path.dirname(parent)
+
         return conf
 
     def _super_git(self, root: bool = False) -> Git:

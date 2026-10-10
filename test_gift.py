@@ -1470,6 +1470,32 @@ class TestGift(BaseTest):
         self.assertEqual(2, e.returncode)
         self.assertEqual([".gift: './foo/bar': dir 'foo/bar' is listed twice"], e.err)
 
+    def test_nested_gift_dirs(self):
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=superp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=superp)
+
+        for conf in ("dirs:\n  dep: ../bargit@master\n  dep/x/nested: ../wowgit@master\n",
+                     "dirs:\n  dep/x/nested: ../wowgit@master\n  dep: ../bargit@master\n"):
+            fwrite(pjoin(superp, ".gift"), conf)
+
+            with self.assertRaises(CalledProcessError) as failure:
+                cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+            self.assertEqual(2, failure.exception.returncode, conf)
+            self.assertEqual([".gift: 'dep/x/nested' is inside sub-repo dir 'dep'"], failure.exception.err, conf)
+
+        # No sub git dir, ref, index entry or commit is made
+        self.assertFalse(os.path.exists(pjoin(supergitp, "gift")))
+        self.assertEqual([], cmdout(origit, "for-each-ref", "refs/gift", cwd=superp))
+        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", cwd=superp))
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=superp))
+
+        # A dir that only starts with the name of another is beside it
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  dep: ../bargit@master\n  dependency: ../wowgit@master\n")
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._fcontent("bar\n", superp, "dep", "bar")
+        self._fcontent("wow\n", superp, "dependency", "wow")
+
     def test_relative_url_from_sub_dir(self):
         # ../bargit in .gift is relative to superp, not to subbarp
         os.makedirs(subbarp)
