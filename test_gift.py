@@ -799,6 +799,19 @@ class TestGift(BaseTest):
         barhead = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
         self.assertEqual(headhash, barhead)
 
+    def test_fetch_sub_git_opts(self):
+        cmdx(giftp, "init", "--sub", cwd=superp)
+
+        # The sub-repo remotes are local paths, which this option forbids
+        e = None
+        try:
+            cmdx(giftp, "-c", "protocol.file.allow=never", "fetch", "--sub", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(128, e.returncode)
+        self.assertEqual(["fatal: transport 'file' not allowed"], e.err)
+
     def test_merge_sub(self):
 
         cmdx(giftp, "init", "--sub", cwd=superp)

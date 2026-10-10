@@ -765,7 +765,8 @@ class Gift(object):
         self.check_no_args(cmds)
         for subrepo in self.conf["dirs"].values():
             self.check_worktree(subrepo)
-            _, out, err = cmdx(self.gitpath, "fetch", subrepo["upstream"]["name"], env=subrepo["env"])
+            sub_git = self._sub_git(subrepo, bare=True)
+            _, out, err = sub_git.cmdf("fetch", subrepo["upstream"]["name"], flag=CmdFlag.RAISE)
             display(out, err)
 
         # HEAD may record a sub-repo commit that only this fetch brought in
@@ -778,7 +779,8 @@ class Gift(object):
         # only ff-only allowed
         for subrepo in self.conf["dirs"].values():
             self.check_worktree(subrepo)
-            _, out, err = cmdx(self.gitpath, "merge", "--ff-only", env=subrepo["env"])
+            sub_git = self._sub_git(subrepo)
+            _, out, err = sub_git.cmdf("merge", "--ff-only", flag=CmdFlag.RAISE)
             display(out, err)
 
     def x_reset_sub(self, cmds: list[str]) -> None:
@@ -802,7 +804,8 @@ class Gift(object):
 
         for subrepo in self.conf["dirs"].values():
             self.check_worktree(subrepo)
-            _, out, err = cmdx(self.gitpath, "reset", *args, super_head_ref, env=subrepo["env"])
+            sub_git = self._sub_git(subrepo)
+            _, out, err = sub_git.cmdf("reset", *args, super_head_ref, flag=CmdFlag.RAISE)
             display(out, err)
 
     def _update_super_head_refs(self, refs: list[list[str]]) -> None:
@@ -816,10 +819,10 @@ class Gift(object):
             if not os.path.isdir(subrepo["env"]["GIT_DIR"]):
                 continue
 
+            sub_git = self._sub_git(subrepo, bare=True)
             try:
-                cmdx(self.gitpath, "update-ref", super_head_ref, commit_hash, env=subrepo["env"])
+                sub_git.cmdf("update-ref", super_head_ref, commit_hash, flag=CmdFlag.RAISE)
             except CalledProcessError as e:
-                sub_git = self._sub_git(subrepo, bare=True)
                 sub_git.out(2, "can not update", super_head_ref, "to", commit_hash)
                 display(e.out, e.err)
 
