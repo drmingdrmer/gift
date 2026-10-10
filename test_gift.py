@@ -661,6 +661,28 @@ class TestGift(BaseTest):
         bar_url = cmd0(origit, "--git-dir", bar_gitdir, "remote", "get-url", "origin")
         self.assertEqual(bargitp, bar_url)
 
+        # Without the old sub git dir, .gift-refs still records the bargit
+        # commit for bar. A failed clone keeps that entry.
+        force_remove(bar_gitdir)
+
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@nosuch", "bar", cwd=emptyp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(1, e.returncode)
+        self._fcontent("- - bar\n  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af\n", emptyp, ".gift-refs")
+
+        # The clone checks out wowgit, and the commit that adds bar to .gift
+        # drops the old entry
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "bar", cwd=emptyp)
+        added_refs = cmdout(origit, "show", "HEAD~:.gift-refs", cwd=emptyp)
+
+        self._fcontent("wow\n", emptyp, "bar", "wow")
+        self._fcontent("- - bar\n  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54\n", emptyp, ".gift-refs")
+        self.assertEqual(["[]"], added_refs)
+
     def test_clone_sub_in_sub_dir(self):
         cmdx(giftp, "init", cwd=emptyp)
         cmdx(origit, "clone", "--bare", bargitp, pjoin(emptyp, "up.git"))

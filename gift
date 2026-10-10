@@ -732,7 +732,22 @@ class Gift(object):
         if os.path.isfile(self.confpath):
             old_content = fread(self.confpath)
 
+        # .gift-refs may still record a commit of an old sub-repo in <dir>, as
+        # after <dir> is dropped from .gift. The new url may not have it, so
+        # the clone drops the entry, and the sub-repo checks out <branch>.
+        refs = []
+        old_refs_content = None
+        refs_path = pjoin(self.working_dir, refs_filename)
+        if os.path.isfile(refs_path):
+            old_refs_content = fread(refs_path)
+            refs = parse_refs(old_refs_content)
+        kept_refs = [pair for pair in refs if pair[0] != subdir]
+
         fwrite(self.confpath, content)
+        changed_paths = [self.confpath]
+        if kept_refs != refs:
+            fwrite(refs_path, yaml.dump(kept_refs, default_flow_style=False))
+            changed_paths.append(refs_path)
         try:
             self.init_git_config()
             self.check_worktree(self.conf["dirs"][subdir])
@@ -741,6 +756,8 @@ class Gift(object):
                 os.unlink(self.confpath)
             else:
                 fwrite(self.confpath, old_content)
+            if kept_refs != refs:
+                fwrite(refs_path, old_refs_content)
             # This clone made the sub git dir, since none was there before.
             # Remove it, so that a retry can make it again.
             if os.path.isdir(sub_gitdir_path):
@@ -748,8 +765,8 @@ class Gift(object):
             raise
 
         super_git = self._super_git()
-        super_git.cmdf("add", self.confpath, flag=CmdFlag.RAISE)
-        super_git.cmdf("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
+        super_git.cmdf("add", *changed_paths, flag=CmdFlag.RAISE)
+        super_git.cmdf("commit", *changed_paths, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
 
         self.x_init_sub([])
         self.x_commit_sub([])
