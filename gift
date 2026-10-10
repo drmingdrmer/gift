@@ -14,6 +14,7 @@
 
 import os
 import re
+import shutil
 import sys
 import logging
 import urllib.parse
@@ -707,6 +708,13 @@ class Gift(object):
         if subdir in self.conf["dirs"]:
             raise GiftError("clone --sub: {} is already a sub-repo in {}".format(subdir, conf_filename))
 
+        # Dropping a dir from .gift leaves its sub git dir, with the old HEAD.
+        # That git dir may hold commits that are not pushed, so the user
+        # decides what to do with it.
+        sub_gitdir_path = pjoin(self.git_dir, self.sub_gitdir_fmt.format(dir=subdir))
+        if os.path.isdir(sub_gitdir_path):
+            raise GiftError("clone --sub: an old sub-repo in {} left its git dir: {}".format(subdir, sub_gitdir_path))
+
         url, sep, branch = remote.rpartition("@")
         if is_relative_path(url):
             url = os.path.relpath(pjoin(self.cwd, url), self.working_dir)
@@ -733,6 +741,10 @@ class Gift(object):
                 os.unlink(self.confpath)
             else:
                 fwrite(self.confpath, old_content)
+            # This clone made the sub git dir, since none was there before.
+            # Remove it, so that a retry can make it again.
+            if os.path.isdir(sub_gitdir_path):
+                shutil.rmtree(sub_gitdir_path)
             raise
 
         super_git = self._super_git()

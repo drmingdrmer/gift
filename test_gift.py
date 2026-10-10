@@ -594,6 +594,7 @@ class TestGift(BaseTest):
     def test_clone_sub_failed(self):
         cmdx(giftp, "init", cwd=emptyp)
         confp = pjoin(emptyp, ".gift")
+        bad_gitdir = pjoin(emptyp, ".git", "gift", "subdir", "bad")
 
         # A bad url, before any .gift exists
         e = None
@@ -605,6 +606,7 @@ class TestGift(BaseTest):
         self.assertEqual(128, e.returncode)
         self.assertFalse(os.path.exists(confp))
         self.assertEqual([], cmdout(origit, "rev-list", "--all", cwd=emptyp))
+        self.assertFalse(os.path.exists(bad_gitdir))
 
         # A bad branch, with .gift from an earlier clone --sub
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=emptyp)
@@ -619,6 +621,7 @@ class TestGift(BaseTest):
         self.assertEqual(1, e.returncode)
         self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
         self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
+        self.assertFalse(os.path.exists(bad_gitdir))
 
         # A dir that is already a sub-repo
         e = None
@@ -633,6 +636,30 @@ class TestGift(BaseTest):
         self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
 
         cmdx(giftp, "init", "--sub", cwd=emptyp)
+
+    def test_clone_sub_dropped_dir(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=emptyp)
+
+        # Dropped from .gift, bar keeps its sub git dir, with the HEAD of bargit
+        fwrite(pjoin(emptyp, ".gift"), "dirs: {}\n")
+        cmdx(origit, *ident_args, "commit", "-m", "drop bar", ".gift", cwd=emptyp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=emptyp)
+
+        e = None
+        try:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "bar", cwd=emptyp)
+        except CalledProcessError as ee:
+            e = ee
+
+        bar_gitdir = pjoin(emptyp, ".git", "gift", "subdir", "bar")
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["clone --sub: an old sub-repo in bar left its git dir: " + bar_gitdir], e.err)
+        self._fcontent("dirs: {}\n", emptyp, ".gift")
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
+
+        bar_url = cmd0(origit, "--git-dir", bar_gitdir, "remote", "get-url", "origin")
+        self.assertEqual(bargitp, bar_url)
 
     def test_clone_sub_in_sub_dir(self):
         cmdx(giftp, "init", cwd=emptyp)
