@@ -756,6 +756,13 @@ class Gift(object):
             refs = parse_refs(old_refs_content)
         kept_refs = [pair for pair in refs if pair[0] != subdir]
 
+        # A failed clone also puts back the index entries of .gift and
+        # .gift-refs, which the commit below adds
+        root_git = self._super_git(root=True)
+        old_index = root_git.cmdf("ls-files", "--stage", "--", conf_filename, refs_filename, flag=CMD_RAISE_STDOUT)
+        work_tree = pjoin(self.working_dir, subdir)
+        work_tree_existed = os.path.exists(work_tree)
+
         fwrite(self.confpath, content)
         changed_paths = [self.confpath]
         if kept_refs != refs:
@@ -764,6 +771,10 @@ class Gift(object):
         try:
             self.init_git_config()
             self.check_worktree(self.conf["dirs"][subdir])
+
+            super_git = self._super_git()
+            super_git.cmdf("add", *changed_paths, flag=CmdFlag.RAISE)
+            super_git.cmdf("commit", *changed_paths, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
         except BaseException:
             if old_content is None:
                 os.unlink(self.confpath)
@@ -771,15 +782,22 @@ class Gift(object):
                 fwrite(self.confpath, old_content)
             if kept_refs != refs:
                 fwrite(refs_path, old_refs_content)
+
+            root_git.cmdf("update-index", "--force-remove", "--", conf_filename, refs_filename, flag=CmdFlag.RAISE)
+            index_info = "".join(line + "\n" for line in old_index)
+            root_git.cmdf("update-index", "--index-info", input=index_info, flag=CmdFlag.RAISE)
+
             # This clone made the sub git dir, since none was there before.
-            # Remove it, so that a retry can make it again.
+            # Remove it, and the files its checkout made, which a retry could
+            # not check out over.
             if os.path.isdir(sub_gitdir_path):
+                if work_tree_existed:
+                    sub_git = self._sub_git(self.conf["dirs"][subdir])
+                    sub_git.cmdf("rm", "-r", "-q", "-f", "--ignore-unmatch", ".", cwd=work_tree, flag=CmdFlag.RAISE)
+                elif os.path.isdir(work_tree):
+                    shutil.rmtree(work_tree)
                 shutil.rmtree(sub_gitdir_path)
             raise
-
-        super_git = self._super_git()
-        super_git.cmdf("add", *changed_paths, flag=CmdFlag.RAISE)
-        super_git.cmdf("commit", *changed_paths, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
 
         self.x_init_sub([])
         self.x_commit_sub([])

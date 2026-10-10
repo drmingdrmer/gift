@@ -661,6 +661,34 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "init", "--sub", cwd=emptyp)
 
+    def test_clone_sub_failed_commit(self):
+        cmdx(giftp, "init", cwd=emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=emptyp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=emptyp)
+        index = cmdout(origit, "ls-files", "--stage", ".gift", ".gift-refs", cwd=emptyp)
+
+        hookp = pjoin(emptyp, ".git", "hooks", "pre-commit")
+        fwrite(hookp, "#!/bin/sh\nexit 1\n")
+        os.chmod(hookp, 0o755)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=emptyp)
+
+        self.assertEqual(1, failure.exception.returncode)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=emptyp))
+        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", ".gift", ".gift-refs", cwd=emptyp))
+        self._fcontent("dirs:\n  bar: ../bargit@master\n", emptyp, ".gift")
+        self._fcontent("- - bar\n  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af\n", emptyp, ".gift-refs")
+        self.assertFalse(os.path.exists(pjoin(emptyp, "wow")))
+        self.assertFalse(os.path.exists(pjoin(emptyp, ".git", "gift", "subdir", "wow")))
+
+        # Without the hook, the same clone works
+        os.unlink(hookp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=emptyp)
+
+        self._fcontent("dirs:\n  bar: ../bargit@master\n  wow: ../wowgit@master\n", emptyp, ".gift")
+        self._fcontent("wow\n", emptyp, "wow", "wow")
+
     def test_clone_sub_dropped_dir(self):
         cmdx(giftp, "init", cwd=emptyp)
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=emptyp)
