@@ -143,7 +143,6 @@ class TestGiftAPI(BaseTest):
         rel, sb = gg.get_subrepo_config(pjoin(self.superp, "foo/bar"))
         self.assertEqual('foo/bar', rel)
         self.assertEqual({
-            'bareenv': {'GIT_DIR': self.base + '/testdata/supergit/gift/subdir/foo/bar'},
             'dir': 'foo/bar',
             'env': {'GIT_DIR': self.base + '/testdata/supergit/gift/subdir/foo/bar',
                     'GIT_WORK_TREE': self.base + '/testdata/super/foo/bar'},
@@ -268,6 +267,8 @@ class TestGiftPartialInit(BaseTest):
         self.gg = gg
         self.sb = sb
         self.rel = rel
+        # For a git command on the sub git dir, without its work tree
+        self.bareenv = {"GIT_DIR": sb['env']['GIT_DIR']}
 
     def test_init_1_with_inited(self):
 
@@ -280,7 +281,7 @@ class TestGiftPartialInit(BaseTest):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
-             self.sb['upstream']['url'], env=self.sb['bareenv'])
+             self.sb['upstream']['url'], env=self.bareenv)
 
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         self._fcontent("bar\n", self.subbarp, "bar")
@@ -289,9 +290,9 @@ class TestGiftPartialInit(BaseTest):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
-             self.sb['upstream']['url'], env=self.sb['bareenv'])
+             self.sb['upstream']['url'], env=self.bareenv)
         cmdx(origit, "fetch", self.sb['upstream']
-             ['name'], env=self.sb['bareenv'], cwd=self.superp)
+             ['name'], env=self.bareenv, cwd=self.superp)
 
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         self._fcontent("bar\n", self.subbarp, "bar")
@@ -300,9 +301,9 @@ class TestGiftPartialInit(BaseTest):
 
         cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
-             self.sb['upstream']['url'], env=self.sb['bareenv'])
+             self.sb['upstream']['url'], env=self.bareenv)
         cmdx(origit, "fetch", self.sb['upstream']
-             ['name'], env=self.sb['bareenv'], cwd=self.superp)
+             ['name'], env=self.bareenv, cwd=self.superp)
 
         os.makedirs(self.sb['env']['GIT_WORK_TREE'], mode=0o755)
         cmdx(origit, "checkout",

@@ -145,7 +145,6 @@ class SubRepoConf(TypedDict):
     refhead: str
     sub_gitdir: str
     env: dict[str, str]
-    bareenv: dict[str, str]
 
 
 class Gift(object):
@@ -368,9 +367,6 @@ class Gift(object):
                     "GIT_WORK_TREE": pjoin(self.working_dir, subdir),
                     # "GIT_OBJECT_DIRECTORY": pjoin(self.git_dir, "objects"),
                 },
-                "bareenv": {
-                    "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
-                },
             }
             conf["dirs"][subdir] = subrepo
 
@@ -407,25 +403,19 @@ class Gift(object):
 
     def _sub_git(self, subrepo: SubRepoConf, bare: bool = False) -> Git:
         git_dir = subrepo["env"]["GIT_DIR"]
-        working_dir = subrepo["env"]["GIT_WORK_TREE"]
+        working_dir: str | None = subrepo["env"]["GIT_WORK_TREE"]
 
         if bare:
-            return Git(
-                self.gitopt,
-                gitpath=self.gitpath,
-                gitdir=git_dir,
-                cwd=self.cwd,
-                ctxmsg='GIFT: ' + subrepo['dir'],
-            )
-        else:
-            return Git(
-                self.gitopt,
-                gitpath=self.gitpath,
-                gitdir=git_dir,
-                working_dir=working_dir,
-                cwd=self.cwd,
-                ctxmsg='GIFT: ' + subrepo['dir'],
-            )
+            working_dir = None
+
+        return Git(
+            self.gitopt,
+            gitpath=self.gitpath,
+            gitdir=git_dir,
+            working_dir=working_dir,
+            cwd=self.cwd,
+            ctxmsg='GIFT: ' + subrepo['dir'],
+        )
 
     def check_worktree(self, subrepo: SubRepoConf) -> None:
         self.try_init_sub_git(subrepo)
@@ -435,7 +425,6 @@ class Gift(object):
 
         sub_gitdir_path = pjoin(self.git_dir, subrepo["sub_gitdir"])
 
-        bare_env = subrepo['bareenv']
         upstream = subrepo["upstream"]
 
         if not os.path.isdir(sub_gitdir_path):
@@ -443,7 +432,7 @@ class Gift(object):
             env = dict(os.environ)
             env.pop("GIT_DIR", None)
             env.pop("GIT_WORK_TREE", None)
-            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"], bare_env["GIT_DIR"],
+            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"], sub_gitdir_path,
                  env=env, inherit_env=False)
         else:
             dd("gitdir exist:", sub_gitdir_path)
