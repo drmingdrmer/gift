@@ -1,0 +1,13 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Run pyauto with stub tools
+      run: sh test/test-pyauto.sh

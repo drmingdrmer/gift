@@ -4,11 +4,6 @@ PYAUTO_AGGRESIVE="${PYAUTO_AGGRESIVE-1}"
 PYAUTO_SCRICT="${PYAUTO_SCRICT-1}"
 
 path="${1-.}"
-if [ -f "$path" ]; then
-    fns="$path"
-else
-    fns="$(find "$path" -name "*.py" -exec echo '"{}"' \;)"
-fi
 
 autopep8_options='--max-line-length 120'
 autoflake_options=''
@@ -62,9 +57,20 @@ die_if_changed()
     fi
 }
 
-eval autopep8  -i $autopep8_options        $fns
-eval autoflake -i $autoflake_options       $fns
-eval isort     --force-single-line-imports $fns
-eval pyflakes                              $fns || die_if_strict
+run_on_py_files()
+{
+    # Each file name is one argument, never shell code: a name such as
+    # "$(cmd).py" must not run cmd
+    if [ -f "$path" ]; then
+        "$@" "$path"
+    else
+        find "$path" -name "*.py" -exec "$@" {} +
+    fi
+}
+
+run_on_py_files autopep8  -i $autopep8_options
+run_on_py_files autoflake -i $autoflake_options
+run_on_py_files isort     --force-single-line-imports
+run_on_py_files pyflakes                              || die_if_strict
 
 die_if_changed
