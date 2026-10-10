@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import logging
+import urllib.parse
 from typing import Any
 from typing import TypedDict
 
@@ -316,6 +317,11 @@ class Gift(object):
             if is_relative_path(url):
                 url = os.path.normpath(pjoin(self.working_dir, url))
 
+            # A dir may hold what a ref name can not, such as " " or a
+            # leading ".". quote() keeps "." and "~", so they are quoted after.
+            ref_name = urllib.parse.quote(subdir)
+            ref_name = ref_name.replace(".", "%2E").replace("~", "%7E")
+
             sub_gitdir = self.sub_gitdir_fmt.format(dir=subdir)
             subrepo: SubRepoConf = {
                 "dir": subdir,
@@ -324,7 +330,7 @@ class Gift(object):
                     "url": url,
                     "branch": branch,
                 },
-                "refhead": "refs/gift/sub/{dir}".format(dir=subdir),
+                "refhead": "refs/gift/sub/{dir}".format(dir=ref_name),
                 "sub_gitdir": sub_gitdir,
                 "env": {
                     "GIT_DIR": pjoin(self.git_dir, sub_gitdir),

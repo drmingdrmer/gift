@@ -1207,6 +1207,17 @@ class TestGift(BaseTest):
 
         self.assertFalse(os.path.exists(pjoin(this_base, "testdata", "x")))
 
+    def test_gift_dir_not_ref_name(self):
+        # A ref name can not hold " " or a part with a leading "."
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  my dep: ../bargit@master\n  .dot/x: ../wowgit@master\n")
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp)
+
+        self._gitoutput([giftp, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [".dot/x/wow", ".gift", ".gift-refs", "imsuperman", "my dep/bar"], cwd=superp)
+        self._gitoutput([origit, "for-each-ref", "--format=%(refname)", "refs/gift/sub"],
+                        ["refs/gift/sub/%2Edot/x", "refs/gift/sub/my%20dep"], cwd=superp)
+
     def test_gift_dir_with_git_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # The git dir is x/admin in the work tree
