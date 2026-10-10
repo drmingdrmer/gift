@@ -15,6 +15,7 @@ from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
 from k3handy import cmd0
+from k3handy import cmdf
 from k3handy import cmdout
 from k3handy import cmdtty
 from k3handy import cmdx
@@ -36,6 +37,7 @@ Gift = gift.Gift
 this_base = os.path.dirname(__file__)
 
 giftp = pjoin(this_base, "gift")
+subrepop = pjoin(this_base, "git-subrepo")
 origit = "git"
 
 emptyp = pjoin(this_base, "testdata", "empty")
@@ -1498,6 +1500,30 @@ class TestGift(BaseTest):
 
         gift_lines = [line for line in err if line.startswith("GIFT: ")]
         self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:"], gift_lines)
+
+
+class TestGitSubrepo(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = tmp.name
+
+        # git-subrepo commits on HEAD, so the repo needs a commit
+        cmdx(origit, "init", self.repo)
+        cmdx(origit, "config", "user.name", "fooUser", cwd=self.repo)
+        cmdx(origit, "config", "user.email", "my@email.org", cwd=self.repo)
+        cmdx(origit, "commit", "--allow-empty", "-m", "init", cwd=self.repo)
+
+    def _update(self, conf):
+        fwrite(pjoin(self.repo, ".gitsubrepo"), conf)
+        return cmdf(subrepop, cwd=self.repo)
+
+    def test_update(self):
+        # Run by its shebang, git-subrepo reads bash syntax such as ${a:0:1}
+        code, _, err = self._update("bar " + bargitp + " master\n")
+        self.assertEqual(0, code, err)
+        self.assertEqual("bar\n", fread(pjoin(self.repo, "bar", "bar")))
 
 
 def force_remove(fn):
