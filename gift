@@ -40,9 +40,9 @@ from k3handy import prebase
 from k3proc import CalledProcessError
 
 version = '0.2.0'
-conffn = ".gift"
-refsfn = ".gift-refs"
-superref = "refs/remotes/super/head"
+conf_filename = ".gift"
+refs_filename = ".gift-refs"
+super_head_ref = "refs/remotes/super/head"
 CMD_RAISE_PASS = [CmdFlag.RAISE, CmdFlag.PASS]
 
 # Commands that never move HEAD, so they never change .gift-refs in HEAD
@@ -81,7 +81,7 @@ class Upstream(TypedDict):
 
 
 class SubRepoConf(TypedDict):
-    # One sub-repo entry of .gift, as Gift.parse() expands it
+    # One sub-repo entry of .gift, as Gift.parse_conf() expands it
     dir: str
     upstream: Upstream
     refhead: str
@@ -97,8 +97,8 @@ class Gift(object):
     # inside gitdir:
     sub_gitdir_fmt = "gift/subdir/{dir}"
 
-    def __init__(self, opt: GitOpt) -> None:
-        self.gitopt = opt.clone()
+    def __init__(self, gitopt: GitOpt) -> None:
+        self.gitopt = gitopt.clone()
         if self.gitopt.opt.get('exec_path') is None:
             self.gitpath = 'git'
         else:
@@ -108,11 +108,11 @@ class Gift(object):
         # When multiple -C options are given, each subsequent non-absolute -C
         # <path> is interpreted relative to the preceding -C <path>.
 
-        st = pabs(".")
-        for p in self.gitopt.opt['startpath']:
-            st = prebase(st, p)
+        startpath = pabs(".")
+        for path in self.gitopt.opt['startpath']:
+            startpath = prebase(startpath, path)
 
-        self.startpath = st
+        self.startpath = startpath
         self.cwd = self.startpath
         # Git objects run in self.cwd, so passing -C to git would apply it twice
         self.gitopt.opt['startpath'] = []
@@ -171,140 +171,136 @@ class Gift(object):
 
         dd("working_dir:", self.working_dir)
 
-        self.confpath = self.working_dir + '/' + conffn
-        self.conf = self.parse()
+        self.confpath = self.working_dir + '/' + conf_filename
+        self.conf = self.parse_conf()
 
-    def parse_remote(self, subdir: str, remo: object) -> list[str]:
-        usage = "{}: {}: expect <url>@<branch>, got: {!r}".format(conffn, subdir, remo)
-        if not isinstance(remo, str):
+    def parse_remote(self, subdir: str, remote: object) -> list[str]:
+        usage = "{}: {}: expect <url>@<branch>, got: {!r}".format(conf_filename, subdir, remote)
+        if not isinstance(remote, str):
             raise GiftError(usage)
 
-        elts = remo.rsplit("@", 1)
-        if len(elts) != 2 or elts[0] == '':
+        parts = remote.rsplit("@", 1)
+        if len(parts) != 2 or parts[0] == '':
             raise GiftError(usage)
+
+        url, branch = parts
 
         # An ssh url without a branch splits at "git@"; a branch name has no ":"
-        if elts[1] == '' or ':' in elts[1]:
+        if branch == '' or ':' in branch:
             raise GiftError(usage)
 
         # "ssh://git@host/path" without a branch splits after the user name,
         # which leaves a url without a path
-        _, sep, rest = elts[0].partition("://")
+        _, sep, rest = url.partition("://")
         if sep != '' and '/' not in rest:
             raise GiftError(usage)
 
-        return ["origin", elts[0], elts[1]]
+        return ["origin", url, branch]
 
     def check_dir(self, subdir: object) -> None:
         # .gift comes with the repo, so a dir in it must not lead the sub-repo
         # checkout out of the work tree or into a git dir
-        msg = "{}: {!r}: expect a dir inside the work tree and outside .git".format(conffn, subdir)
+        msg = "{}: {!r}: expect a dir inside the work tree and outside .git".format(conf_filename, subdir)
         if not isinstance(subdir, str):
             raise GiftError(msg)
 
         # realpath also follows a symlink that leads out of the work tree
         root = os.path.realpath(self.working_dir)
         path = os.path.realpath(pjoin(root, subdir))
-        rel = os.path.relpath(path, root)
-        parts = rel.lower().split(os.sep)
+        relpath = os.path.relpath(path, root)
+        parts = relpath.lower().split(os.sep)
 
-        if rel == '.' or parts[0] == '..' or '.git' in parts:
+        if relpath == '.' or parts[0] == '..' or '.git' in parts:
             raise GiftError(msg)
 
     def read_conf(self) -> dict[str, Any]:
         try:
             with open(self.confpath, 'r') as f:
-                cont = f.read()
+                content = f.read()
         except OSError:
             return {
                 "dirs": {}
             }
 
         try:
-            yml = yaml.safe_load(cont)
+            conf = yaml.safe_load(content)
         except yaml.MarkedYAMLError as e:
-            msg = "{}: line {}: {}".format(conffn, e.problem_mark.line + 1, e.problem)
+            msg = "{}: line {}: {}".format(conf_filename, e.problem_mark.line + 1, e.problem)
             raise GiftError(msg)
 
         # An empty .gift, like a missing one, has no sub-repo
-        if yml is None:
+        if conf is None:
             return {
                 "dirs": {}
             }
 
-        if not isinstance(yml, dict) or not isinstance(yml.get("dirs"), dict):
-            raise GiftError(conffn + ": expect dirs: {<dir>: <url>@<branch>, ...}")
+        if not isinstance(conf, dict) or not isinstance(conf.get("dirs"), dict):
+            raise GiftError(conf_filename + ": expect dirs: {<dir>: <url>@<branch>, ...}")
 
-        return yml
+        return conf
 
-    def parse(self) -> dict[str, Any]:
+    def parse_conf(self) -> dict[str, Any]:
 
-        yml = self.read_conf()
+        conf = self.read_conf()
 
-        # rm = yml.get("remotes", {})
-        dirs = yml["dirs"]
+        # rm = conf.get("remotes", {})
+        dirs = conf["dirs"]
 
-        for k in dirs:
-            self.check_dir(k)
-            ups = self.parse_remote(k, dirs[k])
+        for subdir in dirs:
+            self.check_dir(subdir)
+            remote_name, url, branch = self.parse_remote(subdir, dirs[subdir])
 
             # A relative url is relative to the super repo root, where .gift
             # is, but git resolves it against the cwd of each git process
-            url = ups[1]
             if is_relative_path(url):
                 url = os.path.normpath(pjoin(self.working_dir, url))
 
-            sub_gitdir = self.sub_gitdir_fmt.format(dir=k)
-            sb: SubRepoConf = {
-                "dir": k,
+            sub_gitdir = self.sub_gitdir_fmt.format(dir=subdir)
+            subrepo: SubRepoConf = {
+                "dir": subdir,
                 "upstream": {
-                    "name": ups[0],
+                    "name": remote_name,
                     "url": url,
-                    "branch": ups[2],
+                    "branch": branch,
                 },
-                "refhead": "refs/gift/sub/{dir}".format(dir=k),
+                "refhead": "refs/gift/sub/{dir}".format(dir=subdir),
                 "sub_gitdir": sub_gitdir,
                 "env": {
                     "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
-                    "GIT_WORK_TREE": pjoin(self.working_dir, k),
+                    "GIT_WORK_TREE": pjoin(self.working_dir, subdir),
                     # "GIT_OBJECT_DIRECTORY": pjoin(self.git_dir, "objects"),
                 },
                 "bareenv": {
                     "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
                 },
             }
-            dirs[k] = sb
+            dirs[subdir] = subrepo
 
-        return yml
+        return conf
 
-    def _g(self, what: str | SubRepoConf = "", bare: bool = False, root: bool = False) -> Git:
-        if what == '':
-            if root:
-                # Tree objects hold paths from the work-tree root, but k3git's
-                # tree_items() lists a tree relative to cwd. Absolute dirs keep
-                # a relative --git-dir or --work-tree from resolving against
-                # the root.
-                return Git(
-                    self.gitopt,
-                    gitpath=self.gitpath,
-                    gitdir=self.git_dir,
-                    working_dir=self.working_dir,
-                    cwd=self.working_dir,
-                )
-
+    def _super_git(self, root: bool = False) -> Git:
+        if root:
+            # Tree objects hold paths from the work-tree root, but k3git's
+            # tree_items() lists a tree relative to cwd. Absolute dirs keep
+            # a relative --git-dir or --work-tree from resolving against
+            # the root.
             return Git(
                 self.gitopt,
                 gitpath=self.gitpath,
-                cwd=self.cwd,
+                gitdir=self.git_dir,
+                working_dir=self.working_dir,
+                cwd=self.working_dir,
             )
 
-        if isinstance(what, str):
-            sb = self.conf["dirs"][what]
-        else:
-            sb = what
+        return Git(
+            self.gitopt,
+            gitpath=self.gitpath,
+            cwd=self.cwd,
+        )
 
-        git_dir = sb["env"]["GIT_DIR"]
-        working_dir = sb["env"]["GIT_WORK_TREE"]
+    def _sub_git(self, subrepo: SubRepoConf, bare: bool = False) -> Git:
+        git_dir = subrepo["env"]["GIT_DIR"]
+        working_dir = subrepo["env"]["GIT_WORK_TREE"]
 
         if bare:
             return Git(
@@ -312,7 +308,7 @@ class Gift(object):
                 gitpath=self.gitpath,
                 gitdir=git_dir,
                 cwd=self.cwd,
-                ctxmsg='GIFT: ' + sb['dir'],
+                ctxmsg='GIFT: ' + subrepo['dir'],
             )
         else:
             return Git(
@@ -321,106 +317,106 @@ class Gift(object):
                 gitdir=git_dir,
                 working_dir=working_dir,
                 cwd=self.cwd,
-                ctxmsg='GIFT: ' + sb['dir'],
+                ctxmsg='GIFT: ' + subrepo['dir'],
             )
 
-    def check_worktree(self, sb: SubRepoConf) -> None:
-        self.try_init_sub_git(sb)
-        self.try_init_sub_worktree(sb)
+    def check_worktree(self, subrepo: SubRepoConf) -> None:
+        self.try_init_sub_git(subrepo)
+        self.try_init_sub_worktree(subrepo)
 
-    def try_init_sub_git(self, sb: SubRepoConf) -> None:
+    def try_init_sub_git(self, subrepo: SubRepoConf) -> None:
 
-        wtgpath = pjoin(self.git_dir, sb["sub_gitdir"])
+        sub_gitdir_path = pjoin(self.git_dir, subrepo["sub_gitdir"])
 
-        bareenv = sb['bareenv']
-        up = sb["upstream"]
+        bare_env = subrepo['bareenv']
+        upstream = subrepo["upstream"]
 
-        if not os.path.isdir(wtgpath):
+        if not os.path.isdir(sub_gitdir_path):
             # git init --bare fails with a GIT_WORK_TREE set for the super repo
             env = dict(os.environ)
             env.pop("GIT_DIR", None)
             env.pop("GIT_WORK_TREE", None)
-            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + up["branch"], bareenv["GIT_DIR"],
+            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"], bare_env["GIT_DIR"],
                  env=env, inherit_env=False)
         else:
-            dd("gitdir exist:", wtgpath)
+            dd("gitdir exist:", sub_gitdir_path)
 
-        g = self._g(sb, bare=True)
+        sub_git = self._sub_git(subrepo, bare=True)
         # The url as configured: `git remote get-url` expands url.<base>.insteadOf
-        u = g.cmdf("config", "--get", "remote." + up["name"] + ".url", flag=CMD_NONE_ONELINE)
-        if u is None:
-            dd("remote not found, add:", up)
-            g.out(2, "add remote:", up["name"], up["url"])
-            g.remote_add(up["name"], up["url"], capture=False)
-        elif u != up["url"]:
-            g.out(2, "set remote url:", up["name"], up["url"])
-            g.cmdf("remote", "set-url", up["name"], up["url"], flag=CmdFlag.RAISE)
+        configured_url = sub_git.cmdf("config", "--get", "remote." + upstream["name"] + ".url", flag=CMD_NONE_ONELINE)
+        if configured_url is None:
+            dd("remote not found, add:", upstream)
+            sub_git.out(2, "add remote:", upstream["name"], upstream["url"])
+            sub_git.remote_add(upstream["name"], upstream["url"], capture=False)
+        elif configured_url != upstream["url"]:
+            sub_git.out(2, "set remote url:", upstream["name"], upstream["url"])
+            sub_git.cmdf("remote", "set-url", upstream["name"], upstream["url"], flag=CmdFlag.RAISE)
 
-        r = g.rev_of(up["name"] + '/' + up["branch"])
-        if r is None:
-            dd("remote head not found:", up["name"] + '/' + up["branch"])
+        remote_head = sub_git.rev_of(upstream["name"] + '/' + upstream["branch"])
+        if remote_head is None:
+            dd("remote head not found:", upstream["name"] + '/' + upstream["branch"])
             dd("need fetch")
-            g.out(2, "fetch", up["name"], up["url"])
-            g.fetch(up["name"], flag=CMD_RAISE_PASS)
+            sub_git.out(2, "fetch", upstream["name"], upstream["url"])
+            sub_git.fetch(upstream["name"], flag=CMD_RAISE_PASS)
 
-    def try_init_sub_worktree(self, sb: SubRepoConf) -> None:
+    def try_init_sub_worktree(self, subrepo: SubRepoConf) -> None:
 
-        path = sb['env']["GIT_WORK_TREE"]
-        if not os.path.isdir(path):
-            os.makedirs(path, mode=0o755)
+        work_tree = subrepo['env']["GIT_WORK_TREE"]
+        if not os.path.isdir(work_tree):
+            os.makedirs(work_tree, mode=0o755)
 
-        g = self._g(sb)
-        if g.rev_of("HEAD") is None:
+        sub_git = self._sub_git(subrepo)
+        if sub_git.rev_of("HEAD") is None:
             dd("HEAD not found:")
 
-            up = sb['upstream']
+            upstream = subrepo['upstream']
 
             # If .gift-refs records a commit for this dir, the super repo has
             # already checked out its files: adopt it and keep the files.
             refs = []
-            statep = pjoin(self.working_dir, refsfn)
-            if os.path.isfile(statep):
-                cont = fread(statep)
-                refs = yaml.safe_load(cont)
+            refs_path = pjoin(self.working_dir, refs_filename)
+            if os.path.isfile(refs_path):
+                content = fread(refs_path)
+                refs = yaml.safe_load(content)
 
-            recorded = dict(refs).get(sb['dir'])
+            recorded = dict(refs).get(subrepo['dir'])
             if recorded is None:
-                g.checkout(up["branch"])
-            elif g.obj_type(recorded) is None:
+                sub_git.checkout(upstream["branch"])
+            elif sub_git.obj_type(recorded) is None:
                 msg = "{}: can not find commit {} recorded in {}; push it to {} from the clone that made it"
-                raise GiftError(msg.format(sb['dir'], recorded, refsfn, up['name']))
+                raise GiftError(msg.format(subrepo['dir'], recorded, refs_filename, upstream['name']))
             else:
-                upstream = up['name'] + '/' + up['branch']
-                g.reset_to_commit('mixed', recorded)
-                g.cmdf('branch', '--set-upstream-to=' + upstream, flag=CmdFlag.RAISE)
+                upstream_branch = upstream['name'] + '/' + upstream['branch']
+                sub_git.reset_to_commit('mixed', recorded)
+                sub_git.cmdf('branch', '--set-upstream-to=' + upstream_branch, flag=CmdFlag.RAISE)
 
-        self.try_switch_branch(g, sb)
+        self.try_switch_branch(sub_git, subrepo)
 
-    def try_switch_branch(self, g: Git, sb: SubRepoConf) -> None:
+    def try_switch_branch(self, sub_git: Git, subrepo: SubRepoConf) -> None:
         # gift.branch is the .gift branch that the sub-repo was last set to.
         # A changed .gift branch moves the sub-repo once, so a branch that the
         # user checks out later stays.
-        branch = sb['upstream']['branch']
-        prev = g.cmdf("config", "--get", "gift.branch", flag=CMD_NONE_ONELINE)
-        if prev == branch:
+        branch = subrepo['upstream']['branch']
+        prev_branch = sub_git.cmdf("config", "--get", "gift.branch", flag=CMD_NONE_ONELINE)
+        if prev_branch == branch:
             return
 
         # Without a record, as from an older gift, the sub-repo is taken as set
-        if prev is not None:
-            changed = ".gift changed the branch from " + prev + " to " + branch
-            changes = g.cmdf("status", "--porcelain", "--untracked-files=no", flag=CMD_RAISE_STDOUT)
-            if changes != []:
-                g.out(2, "warning:", changed + ", but the work tree has local changes")
+        if prev_branch is not None:
+            change_msg = ".gift changed the branch from " + prev_branch + " to " + branch
+            local_changes = sub_git.cmdf("status", "--porcelain", "--untracked-files=no", flag=CMD_RAISE_STDOUT)
+            if local_changes != []:
+                sub_git.out(2, "warning:", change_msg + ", but the work tree has local changes")
                 return
 
-            code, _, err = g.cmdf("checkout", branch)
+            code, _, err = sub_git.cmdf("checkout", branch)
             if code != 0:
-                g.out(2, "warning:", changed + ", but checkout failed:")
+                sub_git.out(2, "warning:", change_msg + ", but checkout failed:")
                 display(2, err)
                 return
-            g.out(2, changed + ": checkout", branch)
+            sub_git.out(2, change_msg + ": checkout", branch)
 
-        g.cmdf("config", "gift.branch", branch, flag=CmdFlag.RAISE)
+        sub_git.cmdf("config", "gift.branch", branch, flag=CmdFlag.RAISE)
 
     def get_subrepo_config(self, subdir: str) -> tuple[str, SubRepoConf | None]:
 
@@ -431,34 +427,34 @@ class Gift(object):
         dd("working_dir:", working_dir)
         dd("subdir:", subdir)
 
-        rel = os.path.relpath(subdir, working_dir)
-        if rel.startswith('..'):
+        relpath = os.path.relpath(subdir, working_dir)
+        if relpath.startswith('..'):
             dd("subdir is not in working_dir")
             return '', None
 
         dd("conf:", self.conf["dirs"])
 
-        while rel != '':
-            dd("reldir:", rel)
-            if rel in self.conf["dirs"]:
-                return rel, self.conf["dirs"][rel]
+        while relpath != '':
+            dd("reldir:", relpath)
+            if relpath in self.conf["dirs"]:
+                return relpath, self.conf["dirs"][relpath]
 
             # trim last part.
-            rel, _ = os.path.split(rel)
+            relpath, _ = os.path.split(relpath)
         else:
             return '', None
 
     def in_sub_repo_dir(self) -> bool:
         # Without .gift, a sub git dir tells that a dir is a sub-repo
-        rel = os.path.relpath(self.cwd, self.working_dir)
-        if rel.startswith('..'):
+        relpath = os.path.relpath(self.cwd, self.working_dir)
+        if relpath.startswith('..'):
             return False
 
-        while rel not in ('', '.'):
-            sub_gitdir = self.sub_gitdir_fmt.format(dir=rel)
+        while relpath not in ('', '.'):
+            sub_gitdir = self.sub_gitdir_fmt.format(dir=relpath)
             if os.path.isfile(pjoin(self.git_dir, sub_gitdir, "HEAD")):
                 return True
-            rel = os.path.dirname(rel)
+            relpath = os.path.dirname(relpath)
 
         return False
 
@@ -466,9 +462,9 @@ class Gift(object):
         cmd = cmds[0]
         if cmd == '--version':
             display(1, "gift version " + version)
-            self._g().cmdf('--version', flag=CMD_RAISE_PASS)
+            self._super_git().cmdf('--version', flag=CMD_RAISE_PASS)
         elif cmd == '--help':
-            self._g().cmdf('--help', flag=CMD_RAISE_PASS)
+            self._super_git().cmdf('--help', flag=CMD_RAISE_PASS)
             lines = [
                 "",
                 "Gift extended command:",
@@ -481,16 +477,16 @@ class Gift(object):
                 "",
             ]
             # TODO finish them
-            for l in lines:
-                display(1, l)
+            for line in lines:
+                display(1, line)
         elif cmd in ('--exec-path',
                      '--man-path',
                      '--info-path',
                      '--html-path',
                      ):
-            self._g().cmdf(cmd, flag=CMD_RAISE_PASS)
+            self._super_git().cmdf(cmd, flag=CMD_RAISE_PASS)
 
-    def cmd(self, cmds: list[str]) -> None:
+    def run_command(self, cmds: list[str]) -> None:
 
         dd("gift cmd:", cmds)
 
@@ -498,48 +494,48 @@ class Gift(object):
         # and quit.
         if cmds[0] in ("init", "clone") and '--sub' not in cmds:
             # delegate to original git
-            self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
+            self._super_git().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
 
-        conferr = None
+        conf_error = None
         try:
             self.init_git_config()
         except GiftError as e:
-            conferr = e
+            conf_error = e
 
         if self.git_dir is None:
-            self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
+            self._super_git().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
 
-        cmd, issub, cmds = self._arg_param(cmds)
+        cmd, is_sub, cmds = self._strip_sub_flag(cmds)
 
         # A broken .gift, such as one in a merge conflict, must not block the
         # plain commands that fix it. In a sub-repo dir, such a command would
         # go to the super repo instead.
-        if conferr is not None:
-            if issub or (not self.repo_named and self.in_sub_repo_dir()):
-                raise conferr
-            display(2, "GIFT: warning: " + str(conferr))
+        if conf_error is not None:
+            if is_sub or (not self.repo_named and self.in_sub_repo_dir()):
+                raise conf_error
+            display(2, "GIFT: warning: " + str(conf_error))
             self.conf = {"dirs": {}}
 
         follow_head = False
         if self.in_git_dir:
-            if issub:
+            if is_sub:
                 raise GiftError("--sub can not be used in git-dir:" + self.git_dir)
             else:
-                g = self._g().cmdf(*cmds, flag=CMD_RAISE_PASS)
+                self._super_git().cmdf(*cmds, flag=CMD_RAISE_PASS)
         else:
 
-            subdir, sb = '', None
+            subdir, subrepo = '', None
             if not self.repo_named:
-                subdir, sb = self.get_subrepo_config(self.cwd)
-            dd("subdir:", subdir, sb)
+                subdir, subrepo = self.get_subrepo_config(self.cwd)
+            dd("subdir:", subdir, subrepo)
 
-            if sb is not None:
-                self.check_worktree(sb)
+            if subrepo is not None:
+                self.check_worktree(subrepo)
 
             # TODO nested?
-            if issub:
+            if is_sub:
 
                 if cmd == "init":
                     return self.x_init_sub(cmds)
@@ -556,36 +552,36 @@ class Gift(object):
 
                 raise GiftError("--sub is not supported for: " + cmd)
 
-            if sb is not None:
-                g = self._g(sb)
-                g.cmdf(*cmds, flag=CMD_RAISE_PASS)
+            if subrepo is not None:
+                sub_git = self._sub_git(subrepo)
+                sub_git.cmdf(*cmds, flag=CMD_RAISE_PASS)
             else:
                 # Only a command on the super repo that can move HEAD can
                 # change .gift-refs in HEAD
                 follow_head = cmd not in head_fixed_cmds
-                refs0 = None
+                refs_before = None
                 if follow_head:
                     # A parse error is reported by the read after the command
-                    refs0 = self._get_head_refs(warn=False)
+                    refs_before = self._get_head_refs(warn=False)
 
-                g = self._g()
-                g.cmdf(*cmds, flag=CMD_RAISE_PASS)
+                super_git = self._super_git()
+                super_git.cmdf(*cmds, flag=CMD_RAISE_PASS)
                 # TODO run gift in a git-dir
 
         if not follow_head:
             return
 
-        refs1 = self._get_head_refs(warn=True)
-        if refs0 != refs1 and refs1 is not None:
+        refs_after = self._get_head_refs(warn=True)
+        if refs_before != refs_after and refs_after is not None:
             # A checkout or pull may have changed .gift. If the new one is
             # broken, the old one still maps each dir to its sub git dir.
             try:
-                self.conf = self.parse()
+                self.conf = self.parse_conf()
             except GiftError as e:
                 display(2, "GIFT: warning: " + str(e))
-            self._populate_ref(refs1)
+            self._update_super_head_refs(refs_after)
 
-    def _arg_param(self, cmds: list[str]) -> tuple[str, bool, list[str]]:
+    def _strip_sub_flag(self, cmds: list[str]) -> tuple[str, bool, list[str]]:
 
         cmd = cmds[0]
         cmds = cmds[1:]
@@ -596,11 +592,11 @@ class Gift(object):
         else:
             args = cmds
 
-        issub = '--sub' in args
-        if issub:
+        is_sub = '--sub' in args
+        if is_sub:
             cmds.remove('--sub')
 
-        return cmd, issub, [cmd] + cmds
+        return cmd, is_sub, [cmd] + cmds
 
     def _get_head_refs(self, warn: bool) -> list[list[str]] | None:
         # Sub-repo config is not loaded in a git-dir, and without .gift there
@@ -608,18 +604,18 @@ class Gift(object):
         if self.in_git_dir or not os.path.isfile(self.confpath):
             return None
 
-        g = self._g()
+        super_git = self._super_git()
         try:
-            lines = g.cmdf("show", "HEAD:" + refsfn, flag=CMD_RAISE_STDOUT)
+            lines = super_git.cmdf("show", "HEAD:" + refs_filename, flag=CMD_RAISE_STDOUT)
         except CalledProcessError:
             return None
 
-        cont = "\n".join(lines)
+        content = "\n".join(lines)
         try:
-            return yaml.safe_load(cont)
+            return yaml.safe_load(content)
         except yaml.YAMLError as e:
             if warn:
-                display(2, ["GIFT: can not parse " + refsfn + " in HEAD:", str(e)])
+                display(2, ["GIFT: can not parse " + refs_filename + " in HEAD:", str(e)])
             return None
 
     def x_clone_sub(self, cmds: list[str]) -> None:
@@ -646,30 +642,30 @@ class Gift(object):
                 url = "./" + url
             remote = url + sep + branch
 
-        y = self.read_conf()
-        y["dirs"][subdir] = remote
-        cont = yaml.dump(y, default_flow_style=False)
+        conf = self.read_conf()
+        conf["dirs"][subdir] = remote
+        content = yaml.dump(conf, default_flow_style=False)
 
         # Commit .gift only after the clone works: a bad entry in HEAD would
         # break every later --sub command, in every clone
-        oldcont = None
+        old_content = None
         if os.path.isfile(self.confpath):
-            oldcont = fread(self.confpath)
+            old_content = fread(self.confpath)
 
-        fwrite(self.confpath, cont)
+        fwrite(self.confpath, content)
         try:
             self.init_git_config()
             self.check_worktree(self.conf["dirs"][subdir])
         except BaseException:
-            if oldcont is None:
+            if old_content is None:
                 os.unlink(self.confpath)
             else:
-                fwrite(self.confpath, oldcont)
+                fwrite(self.confpath, old_content)
             raise
 
-        g = self._g()
-        g.cmdf("add", self.confpath, flag=CmdFlag.RAISE)
-        g.cmdf("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
+        super_git = self._super_git()
+        super_git.cmdf("add", self.confpath, flag=CmdFlag.RAISE)
+        super_git.cmdf("commit", self.confpath, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
 
         self.x_init_sub([])
         self.x_commit_sub([])
@@ -681,18 +677,17 @@ class Gift(object):
 
     def x_init_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
-        for sub in self.conf["dirs"]:
-            sb = self.conf["dirs"][sub]
-            self.check_worktree(sb)
+        for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
 
         try:
-            cont = fread(pjoin(self.working_dir, refsfn))
+            content = fread(pjoin(self.working_dir, refs_filename))
         except IOError:
             # TODO message
             pass
         else:
-            refs = yaml.safe_load(cont)
-            self._populate_ref(refs)
+            refs = yaml.safe_load(content)
+            self._update_super_head_refs(refs)
 
     def x_commit_sub(self, cmds: list[str]) -> None:
         args = cmds[1:]
@@ -702,67 +697,65 @@ class Gift(object):
         elif args != []:
             raise GiftError("commit --sub accepts only -m <msg>, got: " + " ".join(args))
 
-        g = self._g(root=True)
-        headtree = g.tree_of("HEAD", flag=CmdFlag.RAISE)
-        supertree = headtree
-        parent = g.rev_of("HEAD")
+        super_git = self._super_git(root=True)
+        head_tree = super_git.tree_of("HEAD", flag=CmdFlag.RAISE)
+        super_tree = head_tree
+        parent = super_git.rev_of("HEAD")
         refs = []
         paths = []
-        for sub in self.conf["dirs"]:
-            sb = self.conf["dirs"][sub]
-            self.check_worktree(sb)
-            supertree, commithash = self._add_sub(supertree, sb)
-            refs.append([sb["dir"], commithash])
-            paths.append(pjoin(self.working_dir, sb["dir"]))
+        for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
+            super_tree, commit_hash = self._add_sub_tree(super_tree, subrepo)
+            refs.append([subrepo["dir"], commit_hash])
+            paths.append(pjoin(self.working_dir, subrepo["dir"]))
 
             # Other clones fetch sub-repo commits only from the remote
-            remote = sb["upstream"]["name"]
-            sg = self._g(sb, bare=True)
-            pushed = sg.cmdf("for-each-ref", "--contains", commithash, "refs/remotes/" + remote, flag=CMD_RAISE_STDOUT)
-            if pushed == []:
-                sg.out(2, "warning: commit", commithash, "is not pushed to", remote + ",",
-                       "so other clones can not check it out")
+            remote_name = subrepo["upstream"]["name"]
+            sub_git = self._sub_git(subrepo, bare=True)
+            pushed_refs = sub_git.cmdf("for-each-ref", "--contains", commit_hash, "refs/remotes/" + remote_name,
+                                       flag=CMD_RAISE_STDOUT)
+            if pushed_refs == []:
+                sub_git.out(2, "warning: commit", commit_hash, "is not pushed to", remote_name + ",",
+                            "so other clones can not check it out")
 
         refs = sorted(refs)
-        cont = yaml.dump(refs, default_flow_style=False)
-        statep = pjoin(self.working_dir, refsfn)
-        fwrite(statep, cont)
+        content = yaml.dump(refs, default_flow_style=False)
+        refs_path = pjoin(self.working_dir, refs_filename)
+        fwrite(refs_path, content)
 
-        statehash = g.blob_new(statep, flag=CmdFlag.RAISE)
-        supertree = g.tree_add_obj(supertree, refsfn, statehash)
+        refs_blob = super_git.blob_new(refs_path, flag=CmdFlag.RAISE)
+        super_tree = super_git.tree_add_obj(super_tree, refs_filename, refs_blob)
 
-        if supertree == headtree:
+        if super_tree == head_tree:
             display(2, "GIFT: nothing to commit: no sub-repo changed")
             return
 
-        newcommit = g.cmdf("commit-tree", "-p", parent, supertree, input=msg, flag=CMD_RAISE_ONELINE)
+        new_commit = super_git.cmdf("commit-tree", "-p", parent, super_tree, input=msg, flag=CMD_RAISE_ONELINE)
 
         # Keep other staged changes: reset only the paths this commit changed
-        g.cmdf("reset", newcommit, "--", statep, *paths, flag=CmdFlag.RAISE)
-        g.cmdf("update-ref", "-m", "commit subdirs", "HEAD", newcommit, parent, flag=CmdFlag.RAISE)
+        super_git.cmdf("reset", new_commit, "--", refs_path, *paths, flag=CmdFlag.RAISE)
+        super_git.cmdf("update-ref", "-m", "commit subdirs", "HEAD", new_commit, parent, flag=CmdFlag.RAISE)
 
-        self._populate_ref(refs)
+        self._update_super_head_refs(refs)
 
     def x_fetch_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
-        for sub in self.conf["dirs"]:
-            sb = self.conf["dirs"][sub]
-            self.check_worktree(sb)
-            _, out, err = cmdx(self.gitpath, "fetch", sb["upstream"]["name"], env=sb["env"])
+        for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
+            _, out, err = cmdx(self.gitpath, "fetch", subrepo["upstream"]["name"], env=subrepo["env"])
             display(out, err)
 
         # HEAD may record a sub-repo commit that only this fetch brought in
         refs = self._get_head_refs(warn=True)
         if refs is not None:
-            self._populate_ref(refs)
+            self._update_super_head_refs(refs)
 
     def x_merge_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         # only ff-only allowed
-        for sub in self.conf["dirs"]:
-            sb = self.conf["dirs"][sub]
-            self.check_worktree(sb)
-            _, out, err = cmdx(self.gitpath, "merge", "--ff-only", env=sb["env"])
+        for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
+            _, out, err = cmdx(self.gitpath, "merge", "--ff-only", env=subrepo["env"])
             display(out, err)
 
     def x_reset_sub(self, cmds: list[str]) -> None:
@@ -774,62 +767,61 @@ class Gift(object):
                           '--keep',
                           '-q',
                           '--quiet', ]
-        unknown = [c for c in cmds[1:] if c not in candidate_args]
+        unknown = [arg for arg in cmds[1:] if arg not in candidate_args]
         if unknown != []:
             msg = "reset --sub accepts only " + ", ".join(candidate_args) + ", got: " + " ".join(unknown)
             raise GiftError(msg)
 
         args = []
-        for c in candidate_args:
-            if c in cmds:
-                args.append(c)
+        for arg in candidate_args:
+            if arg in cmds:
+                args.append(arg)
 
-        for sub in self.conf["dirs"]:
-            sb = self.conf["dirs"][sub]
-            self.check_worktree(sb)
-            _, out, err = cmdx(self.gitpath, "reset", *args, superref, env=sb["env"])
+        for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
+            _, out, err = cmdx(self.gitpath, "reset", *args, super_head_ref, env=subrepo["env"])
             display(out, err)
 
-    def _populate_ref(self, refs: list[list[str]]) -> None:
+    def _update_super_head_refs(self, refs: list[list[str]]) -> None:
 
-        for subdir, hsh in refs:
-            sb = self.conf["dirs"].get(subdir)
-            if sb is None:
+        for subdir, commit_hash in refs:
+            subrepo = self.conf["dirs"].get(subdir)
+            if subrepo is None:
                 continue
 
             # Not initialized yet: `gift init --sub` populates it
-            if not os.path.isdir(sb["env"]["GIT_DIR"]):
+            if not os.path.isdir(subrepo["env"]["GIT_DIR"]):
                 continue
 
             try:
-                cmdx(self.gitpath, "update-ref", superref, hsh, env=sb["env"])
+                cmdx(self.gitpath, "update-ref", super_head_ref, commit_hash, env=subrepo["env"])
             except CalledProcessError as e:
-                g = self._g(sb, bare=True)
-                g.out(2, "can not update", superref, "to", hsh)
+                sub_git = self._sub_git(subrepo, bare=True)
+                sub_git.out(2, "can not update", super_head_ref, "to", commit_hash)
                 display(e.out, e.err)
 
-    def _add_sub(self, supertree: str, sb: SubRepoConf) -> tuple[str, str]:
-        g = self._g(root=True)
+    def _add_sub_tree(self, super_tree: str, subrepo: SubRepoConf) -> tuple[str, str]:
+        super_git = self._super_git(root=True)
 
         # Without --no-tags, fetch also copies the sub-repo tags that point
         # into the fetched history
-        g.cmdf("fetch", "--no-tags", sb["env"]["GIT_DIR"], "+HEAD:" + sb["refhead"], flag=CmdFlag.RAISE)
+        super_git.cmdf("fetch", "--no-tags", subrepo["env"]["GIT_DIR"], "+HEAD:" + subrepo["refhead"], flag=CmdFlag.RAISE)
 
-        sub_tree = g.tree_of(sb["refhead"], flag=CmdFlag.RAISE)
-        supertree = g.tree_add_obj(supertree, sb["dir"], sub_tree)
+        sub_tree = super_git.tree_of(subrepo["refhead"], flag=CmdFlag.RAISE)
+        super_tree = super_git.tree_add_obj(super_tree, subrepo["dir"], sub_tree)
 
-        return supertree, g.rev_of(sb["refhead"])
+        return super_tree, super_git.rev_of(subrepo["refhead"])
 
 
-def git_args() -> tuple[GitOpt, int, list[str]]:
+def parse_argv() -> tuple[GitOpt, int, list[str]]:
     args = sys.argv[1:]
 
     gitopt = GitOpt().parse_args(args, {'--gift-verbose': True})
 
     verbose = 0
-    v = os.environ.get('GIFT_VERBOSE')
-    if v is not None:
-        verbose = int(v)
+    env_verbose = os.environ.get('GIFT_VERBOSE')
+    if env_verbose is not None:
+        verbose = int(env_verbose)
 
     if '--gift-verbose' in gitopt.additional:
         verbose = 1
@@ -838,12 +830,12 @@ def git_args() -> tuple[GitOpt, int, list[str]]:
 
 
 if __name__ == "__main__":
-    gitopt, verbose, cmds = git_args()
+    gitopt, verbose, cmds = parse_argv()
 
     dd("gift opt:", gitopt.opt)
     dd("gift cmds:", cmds)
     # TODO need to pass opt to delegated command
-    # TODO test change remote/up['branch'] then init again.
+    # TODO test change remote/upstream['branch'] then init again.
     # TODO git box received a unexpected GIT_DIR env.
     # TODO test command such "git box": git-box: git rev-parse --git-dir
     gift = Gift(gitopt)
@@ -856,13 +848,13 @@ if __name__ == "__main__":
         display(2, "fatal: cannot change to '" + gift.cwd + "': " + reason)
         sys.exit(128)
 
-    lvl = logging.INFO
+    log_level = logging.INFO
     if verbose > 0:
-        lvl = logging.DEBUG
+        log_level = logging.DEBUG
 
     k3log.make_logger(
             fmt= '[%(asctime)s,%(filename)s,%(lineno)d,%(levelname)s] %(message)s',
-            level=lvl)
+            level=log_level)
 
     if cmds == [] and len(gitopt.informative_cmds) == 0:
         gift.exec_informative_cmd(['--help'])
@@ -883,7 +875,7 @@ if __name__ == "__main__":
         if len(gitopt.informative_cmds) > 0:
             gift.exec_informative_cmd(list(gitopt.informative_cmds))
         else:
-            gift.cmd(cmds)
+            gift.run_command(cmds)
     except CalledProcessError as e:
         display(e.out, e.err)
         sys.exit(e.returncode)
