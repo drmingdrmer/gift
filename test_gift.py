@@ -1421,6 +1421,41 @@ class TestGift(BaseTest):
 
         self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=subbarp)
 
+    def test_malformed_gift_refs(self):
+        bar_ref = "- [foo/bar, 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af]\n"
+        usage = ".gift-refs: expect a list of [<dir>, <commit>], got: "
+        cases = [
+            ("42\n", usage + "42"),
+            ("- foo/bar\n", usage + "'foo/bar'"),
+            ("- [foo/bar]\n", usage + "['foo/bar']"),
+            ("- [foo/bar, 42]\n", usage + "['foo/bar', 42]"),
+            ("- [foo/bar, --hard]\n", usage + "['foo/bar', '--hard']"),
+            (bar_ref + bar_ref, ".gift-refs: dir 'foo/bar' is listed twice"),
+        ]
+        for content, msg in cases:
+            fwrite(pjoin(superp, ".gift-refs"), content)
+
+            e = None
+            try:
+                cmdx(giftp, "init", "--sub", cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(2, e.returncode, content)
+            self.assertEqual(msg, e.err[-1], content)
+
+        # An empty .gift-refs records no commit
+        fwrite(pjoin(superp, ".gift-refs"), "")
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._fcontent("bar\n", subbarp, "bar")
+
+        # A malformed .gift-refs in HEAD only warns
+        fwrite(pjoin(superp, ".gift-refs"), "42\n")
+        cmdx(origit, "add", ".gift-refs", cwd=superp)
+        cmdx(origit, *ident_args, "commit", "-m", "bad refs", cwd=superp)
+        _, _, err = cmdx(giftp, "fetch", "--sub", cwd=superp)
+        self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:", usage + "42"], err[-2:])
+
     def test_bad_gift_refs(self):
         fwrite(pjoin(superp, ".gift-refs"), "- [foo/bar\n")
         cmdx(origit, "add", ".gift-refs", cwd=superp)

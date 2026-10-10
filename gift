@@ -13,6 +13,7 @@
 # ///
 
 import os
+import re
 import sys
 import logging
 from typing import Any
@@ -72,6 +73,41 @@ def is_relative_path(url: str) -> bool:
         return False
 
     return not os.path.isabs(url) and not url.startswith("~")
+
+
+def parse_refs(content: str) -> list[list[str]]:
+    # .gift-refs comes with the repo, and its commits go to git as args
+    try:
+        refs = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise GiftError(refs_filename + ": " + str(e))
+
+    # An empty .gift-refs, like a missing one, records no commit
+    if refs is None:
+        return []
+
+    usage = refs_filename + ": expect a list of [<dir>, <commit>], got: {!r}"
+    if not isinstance(refs, list):
+        raise GiftError(usage.format(refs))
+
+    dirs = set()
+    for pair in refs:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise GiftError(usage.format(pair))
+
+        subdir, commit_hash = pair
+        if not isinstance(subdir, str) or not isinstance(commit_hash, str):
+            raise GiftError(usage.format(pair))
+
+        # A full sha1 or sha256 id, which git can not read as an option
+        if re.fullmatch("[0-9a-f]{40}|[0-9a-f]{64}", commit_hash) is None:
+            raise GiftError(usage.format(pair))
+
+        if subdir in dirs:
+            raise GiftError("{}: dir {!r} is listed twice".format(refs_filename, subdir))
+        dirs.add(subdir)
+
+    return refs
 
 
 class Upstream(TypedDict):
@@ -395,7 +431,7 @@ class Gift(object):
             refs_path = pjoin(self.working_dir, refs_filename)
             if os.path.isfile(refs_path):
                 content = fread(refs_path)
-                refs = yaml.safe_load(content)
+                refs = parse_refs(content)
 
             recorded = dict(refs).get(subrepo['dir'])
             if recorded is None:
@@ -630,8 +666,8 @@ class Gift(object):
 
         content = "\n".join(lines)
         try:
-            return yaml.safe_load(content)
-        except yaml.YAMLError as e:
+            return parse_refs(content)
+        except GiftError as e:
             if warn:
                 display(2, ["GIFT: can not parse " + refs_filename + " in HEAD:", str(e)])
             return None
@@ -709,7 +745,7 @@ class Gift(object):
             # TODO message
             pass
         else:
-            refs = yaml.safe_load(content)
+            refs = parse_refs(content)
             self._update_super_head_refs(refs)
 
     def x_commit_sub(self, cmds: list[str]) -> None:
