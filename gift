@@ -249,6 +249,13 @@ class Gift(object):
         if relpath == '.' or parts[0] == '..' or '.git' in parts:
             raise GiftError(msg)
 
+        # The git dir may be in the work tree with another name, as after
+        # git init --separate-git-dir. Compare in lower case, as for .git.
+        lower_path = path.lower()
+        git_dir = os.path.realpath(self.git_dir).lower()
+        if os.path.commonpath([lower_path, git_dir]) in (lower_path, git_dir):
+            raise GiftError(msg)
+
         # git drops "link/.." with normpath() before it follows the symlink
         # "link", and the lookup by cwd sees a symlinked dir by its target
         # path: the dir must already be the checked relpath

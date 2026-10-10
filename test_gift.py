@@ -1207,6 +1207,26 @@ class TestGift(BaseTest):
 
         self.assertFalse(os.path.exists(pjoin(this_base, "testdata", "x")))
 
+    def test_gift_dir_with_git_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # The git dir is x/admin in the work tree
+            os.mkdir(pjoin(tmpdir, "x"))
+            cmdx(origit, "init", "--separate-git-dir=" + pjoin(tmpdir, "x", "admin"), cwd=tmpdir)
+
+            for d in ("x", "x/admin", "x/admin/sub"):
+                fwrite(pjoin(tmpdir, ".gift"), "dirs:\n  " + d + ": " + bargitp + "@master\n")
+
+                e = None
+                try:
+                    cmdx(giftp, "init", "--sub", cwd=tmpdir)
+                except CalledProcessError as ee:
+                    e = ee
+
+                self.assertEqual(2, e.returncode, d)
+                self.assertEqual([".gift: '" + d + "': expect a dir inside the work tree and outside .git"], e.err, d)
+
+            self._nofile(tmpdir, "x", "admin", "sub", "bar")
+
     def test_gift_dir_symlink(self):
         # superp/link leads to superp/nested/deep: the OS reads link/../../x
         # as superp/x, but git reads it as x beside superp
