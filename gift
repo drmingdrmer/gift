@@ -625,20 +625,18 @@ class Gift(object):
             # TODO nested?
             if is_sub:
 
-                if cmd == "init":
-                    return self.x_init_sub(cmds)
-                if cmd == "clone":
-                    return self.x_clone_sub(cmds)
-                elif cmd == 'commit':
-                    return self.x_commit_sub(cmds)
-                elif cmd == 'fetch':
-                    return self.x_fetch_sub(cmds)
-                elif cmd == 'merge':
-                    return self.x_merge_sub(cmds)
-                elif cmd == 'reset':
-                    return self.x_reset_sub(cmds)
-
-                raise GiftError("--sub is not supported for: " + cmd)
+                handlers = {
+                    "init": self.x_init_sub,
+                    "clone": self.x_clone_sub,
+                    "commit": self.x_commit_sub,
+                    "fetch": self.x_fetch_sub,
+                    "merge": self.x_merge_sub,
+                    "reset": self.x_reset_sub,
+                }
+                handler = handlers.get(cmd)
+                if handler is None:
+                    raise GiftError("--sub is not supported for: " + cmd)
+                return handler(cmds)
 
             if subrepo is not None:
                 # Not before the --sub commands, which set up each sub-repo
