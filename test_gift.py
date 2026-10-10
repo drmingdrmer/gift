@@ -206,6 +206,19 @@ class TestGiftAPI(BaseTest):
         # Without a value, git reports the option
         self.assertEqual(["--git-dir"], gift.join_opt_values(["--git-dir"]))
 
+    def test_is_outside(self):
+        cases = {
+            "..": True,
+            "../x": True,
+            "../..": True,
+            "..dep": False,
+            "..dep/x": False,
+            ".": False,
+            "x": False,
+        }
+        got = {relpath: gift.is_outside(relpath) for relpath in cases}
+        self.assertEqual(cases, got)
+
 
 class TestGiftPartialInit(BaseTest):
 
@@ -1006,6 +1019,35 @@ class TestGift(BaseTest):
             self.assertEqual(git_failure.exception.returncode, gift_failure.exception.returncode, named)
             self.assertEqual(git_failure.exception.err, gift_failure.exception.err, named)
             self._fcontent("edited\n", subbarp, "bar")
+
+    def test_dot_dot_dir(self):
+        # "..dep" is a dir in the work tree, not a path to the parent dir
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  ..dep: ../bargit@master\n")
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        depp = pjoin(superp, "..dep")
+        childp = pjoin(depp, "child")
+        os.mkdir(childp)
+
+        for cwd in (depp, childp):
+            head = cmd0(giftp, "rev-parse", "HEAD", cwd=cwd)
+            self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", head, cwd)
+
+        # A command in ..dep changes the files of the sub-repo, not of super
+        fwrite(pjoin(superp, "imsuperman"), "changed\n")
+        fwrite(pjoin(depp, "bar"), "changed\n")
+        cmdx(giftp, "reset", "-q", "--hard", cwd=childp)
+
+        self._fcontent("changed\n", superp, "imsuperman")
+        self._fcontent("bar\n", depp, "bar")
+        self._fcontent("dirs:\n  ..dep: ../bargit@master\n", superp, ".gift")
+
+        # With a broken .gift, the sub git dir tells that ..dep is a sub-repo
+        fwrite(pjoin(superp, ".gift"), "foo: 1\n")
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "log", "-1", cwd=childp)
+
+        self.assertEqual(2, failure.exception.returncode)
+        self.assertEqual([".gift: expect dirs: {<dir>: <url>@<branch>, ...}"], failure.exception.err)
 
     def test_populate_super_ref(self):
 

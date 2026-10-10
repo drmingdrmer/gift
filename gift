@@ -77,6 +77,12 @@ def is_relative_path(url: str) -> bool:
     return not os.path.isabs(url) and not url.startswith("~")
 
 
+def is_outside(relpath: str) -> bool:
+    # A relative path leads out of its base dir only by a ".." part: "..dep"
+    # is a dir inside
+    return relpath == os.pardir or relpath.startswith(os.pardir + os.sep)
+
+
 def parse_refs(content: str) -> list[list[str]]:
     # .gift-refs comes with the repo, and its commits go to git as args
     try:
@@ -503,7 +509,7 @@ class Gift(object):
         dd("subdir:", subdir)
 
         relpath = os.path.relpath(subdir, working_dir)
-        if relpath.startswith('..'):
+        if is_outside(relpath):
             dd("subdir is not in working_dir")
             return '', None
 
@@ -522,7 +528,7 @@ class Gift(object):
     def in_sub_repo_dir(self) -> bool:
         # Without .gift, a sub git dir tells that a dir is a sub-repo
         relpath = os.path.relpath(self.cwd, self.working_dir)
-        if relpath.startswith('..'):
+        if is_outside(relpath):
             return False
 
         while relpath not in ('', '.'):
