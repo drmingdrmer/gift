@@ -1137,6 +1137,46 @@ class TestGift(BaseTest):
 
         self.assertFalse(os.path.exists(pjoin(this_base, "testdata", "x")))
 
+    def test_gift_dir_symlink(self):
+        # superp/link leads to superp/nested/deep: the OS reads link/../../x
+        # as superp/x, but git reads it as x beside superp
+        os.makedirs(pjoin(superp, "nested", "deep"))
+        os.symlink(pjoin("nested", "deep"), pjoin(superp, "link"))
+        xp = pjoin(this_base, "testdata", "x")
+        os.mkdir(xp)
+
+        # A symlinked dir and an absolute path are other names of a dir
+        for d in ("link/../../x", "link", pjoin(superp, "foo", "bar")):
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  " + d + ": ../bargit@master\n")
+
+            e = None
+            try:
+                cmdx(giftp, "init", "--sub", cwd=superp)
+            except CalledProcessError as ee:
+                e = ee
+
+            self.assertEqual(2, e.returncode, d)
+            self.assertEqual([".gift: '" + d + "': expect a relative path without symlinks"], e.err, d)
+
+        self.assertEqual([], os.listdir(xp))
+
+    def test_gift_dir_alias(self):
+        # ./foo/bar/ is foo/bar, where a command in subbarp finds it
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  ./foo/bar/: ../bargit@master\n")
+        cmdx(giftp, "init", "--sub", cwd=superp)
+        self._gitoutput([giftp, "log", "-1", "--format=%s"], ["add bar"], cwd=subbarp)
+
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  foo/bar: ../bargit@master\n  ./foo/bar: ../wowgit@master\n")
+
+        e = None
+        try:
+            cmdx(giftp, "init", "--sub", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift: './foo/bar': dir 'foo/bar' is listed twice"], e.err)
+
     def test_relative_url_from_sub_dir(self):
         # ../bargit in .gift is relative to superp, not to subbarp
         os.makedirs(subbarp)

@@ -197,7 +197,7 @@ class Gift(object):
 
         return ["origin", url, branch]
 
-    def check_dir(self, subdir: object) -> None:
+    def check_dir(self, subdir: object) -> str:
         # .gift comes with the repo, so a dir in it must not lead the sub-repo
         # checkout out of the work tree or into a git dir
         msg = "{}: {!r}: expect a dir inside the work tree and outside .git".format(conf_filename, subdir)
@@ -212,6 +212,14 @@ class Gift(object):
 
         if relpath == '.' or parts[0] == '..' or '.git' in parts:
             raise GiftError(msg)
+
+        # git drops "link/.." with normpath() before it follows the symlink
+        # "link", and the lookup by cwd sees a symlinked dir by its target
+        # path: the dir must already be the checked relpath
+        if os.path.normpath(subdir) != relpath:
+            raise GiftError("{}: {!r}: expect a relative path without symlinks".format(conf_filename, subdir))
+
+        return relpath
 
     def read_conf(self) -> dict[str, Any]:
         try:
@@ -245,10 +253,16 @@ class Gift(object):
 
         # rm = conf.get("remotes", {})
         dirs = conf["dirs"]
+        conf["dirs"] = {}
 
-        for subdir in dirs:
-            self.check_dir(subdir)
-            remote_name, url, branch = self.parse_remote(subdir, dirs[subdir])
+        # Each sub-repo is keyed by its checked dir, so that "./foo" and the
+        # lookup by cwd, which yields "foo", find the same entry
+        for key in dirs:
+            subdir = self.check_dir(key)
+            if subdir in conf["dirs"]:
+                raise GiftError("{}: {!r}: dir {!r} is listed twice".format(conf_filename, key, subdir))
+
+            remote_name, url, branch = self.parse_remote(key, dirs[key])
 
             # A relative url is relative to the super repo root, where .gift
             # is, but git resolves it against the cwd of each git process
@@ -274,7 +288,7 @@ class Gift(object):
                     "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
                 },
             }
-            dirs[subdir] = subrepo
+            conf["dirs"][subdir] = subrepo
 
         return conf
 
