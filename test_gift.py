@@ -799,6 +799,28 @@ class TestGift(BaseTest):
         barhead = cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp)
         self.assertEqual(headhash, barhead)
 
+    def test_fetch_sub_recorded_commit(self):
+        # .gift-refs records a foo/bar commit that is not pushed yet
+        cmdx(origit, "clone", bargitp, barp)
+        fwrite(pjoin(barp, "for_fetch"), "for_fetch")
+        cmdx(origit, "add", "for_fetch", cwd=barp)
+        cmdx(origit, *ident_args, "commit", "-m", "add for_fetch", cwd=barp)
+        headhash = cmd0(origit, "rev-parse", "HEAD", cwd=barp)
+        fwrite(pjoin(superp, ".gift-refs"), "- - foo/bar\n  - " + headhash + "\n")
+
+        e = None
+        try:
+            cmdx(giftp, "init", "--sub", cwd=superp)
+        except CalledProcessError as ee:
+            e = ee
+
+        self.assertEqual(2, e.returncode)
+
+        # Once it is pushed, fetch --sub brings it in, then checks it out
+        cmdx(origit, "push", "origin", "master", cwd=barp)
+        cmdx(giftp, "fetch", "--sub", cwd=subbarp)
+        self.assertEqual(headhash, cmd0(giftp, "rev-parse", "HEAD", cwd=subbarp))
+
     def test_fetch_sub_git_opts(self):
         cmdx(giftp, "init", "--sub", cwd=superp)
 

@@ -549,9 +549,6 @@ class Gift(object):
                 subdir, subrepo = self.get_subrepo_config(self.cwd)
             dd("subdir:", subdir, subrepo)
 
-            if subrepo is not None:
-                self.check_worktree(subrepo)
-
             # TODO nested?
             if is_sub:
 
@@ -571,6 +568,9 @@ class Gift(object):
                 raise GiftError("--sub is not supported for: " + cmd)
 
             if subrepo is not None:
+                # Not before the --sub commands, which set up each sub-repo
+                # themselves: fetch --sub fetches before it checks out
+                self.check_worktree(subrepo)
                 sub_git = self._sub_git(subrepo)
                 sub_git.cmdf(*cmds, flag=CMD_RAISE_PASS)
             else:
@@ -764,10 +764,13 @@ class Gift(object):
     def x_fetch_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            # The work tree waits for the fetch, which may bring in the commit
+            # that .gift-refs records for it
+            self.try_init_sub_git(subrepo)
             sub_git = self._sub_git(subrepo, bare=True)
             _, out, err = sub_git.cmdf("fetch", subrepo["upstream"]["name"], flag=CmdFlag.RAISE)
             display(out, err)
+            self.try_init_sub_worktree(subrepo)
 
         # HEAD may record a sub-repo commit that only this fetch brought in
         refs = self._get_head_refs(warn=True)
