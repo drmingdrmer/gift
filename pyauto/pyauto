@@ -68,9 +68,9 @@ run_on_py_files()
     fi
 }
 
-run_on_py_files autopep8  -i $autopep8_options
-run_on_py_files autoflake -i $autoflake_options
-run_on_py_files isort     --force-single-line-imports
+run_on_py_files autopep8  -i $autopep8_options        || die_if_strict
+run_on_py_files autoflake -i $autoflake_options       || die_if_strict
+run_on_py_files isort     --force-single-line-imports || die_if_strict
 run_on_py_files pyflakes                              || die_if_strict
 
 die_if_changed
