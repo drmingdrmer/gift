@@ -892,9 +892,13 @@ fetch_remote()
             ;;
     esac
 
-    local localtag=refs/tags/_gitsubrepo/$prefix
-    # git tag does not allow leading dot. E.g.: "refs/tags/_gitsubrepo/a/.b"
-    localtag="${localtag//./-}"
+    # Each dir gets its own tag, as one ref name part: a part can not have a
+    # leading ".", and with "/" kept, the tag of "a" would block that of
+    # "a/b". "%" is quoted first, so "%2E" in a dir stays apart from ".".
+    local tagname="${prefix//\%/%25}"
+    tagname="${tagname//./%2E}"
+    tagname="${tagname//\//%2F}"
+    local localtag=refs/tags/_gitsubrepo/$tagname
 
     local mes="$url $ref -> $localtag"
 

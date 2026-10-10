@@ -1697,6 +1697,18 @@ class TestGitSubrepo(unittest.TestCase):
         self.assertFalse(os.path.exists(markerp))
         self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.repo))
 
+    def test_tag_per_dir(self):
+        # "." in a dir must not turn into a char that another dir has: each
+        # dir is fetched into its own tag
+        wowgitp = pjoin(this_base, "testdata", "wowgit")
+        code, _, err = self._update("foo.bar " + bargitp + " master\nfoo-bar " + wowgitp + " master\n")
+        self.assertEqual(0, code, err)
+
+        paths = cmdout(origit, "ls-tree", "-r", "--name-only", "HEAD", cwd=self.repo)
+        self.assertEqual(["foo-bar/wow", "foo.bar/bar"], paths)
+        self.assertEqual(["bar"], cmdout(origit, "show", "HEAD:foo.bar/bar", cwd=self.repo))
+        self.assertEqual(["wow"], cmdout(origit, "show", "HEAD:foo-bar/wow", cwd=self.repo))
+
     def test_failed_fetch(self):
         code, _, _ = self._update("bar " + bargitp + " master\nnosuch " + pjoin(self.repo, "nosuch") + " master\n")
         self.assertEqual(1, code)
