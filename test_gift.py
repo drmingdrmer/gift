@@ -39,8 +39,6 @@ this_base = os.path.dirname(__file__)
 giftp = pjoin(this_base, "gift")
 origit = "git"
 
-execpath = cmd0(origit, '--exec-path')
-
 ident_args = [
         '-c', 'user.name=fooUser',
         '-c', 'user.email=my@email.org',
@@ -64,6 +62,19 @@ class BaseTest(unittest.TestCase):
         self.subwowp = pjoin(self.base, "testdata", "super", "foo", "wow")
         self.bargitp = pjoin(self.base, "testdata", "bargit")
         self.barp = pjoin(self.base, "testdata", "bar")
+
+    @pytest.fixture(autouse=True)
+    def _git_env(self, monkeypatch):
+        # git and gift in a test read no setting of the host: no git config,
+        # no GIT_* variable such as a GIT_DIR from a git hook, and no PAGER
+        for name in list(os.environ):
+            if name.startswith("GIT_"):
+                monkeypatch.delenv(name)
+        monkeypatch.delenv("PAGER", raising=False)
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+        monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+        # Without TERM, less, the pager of git under cmdtty, waits for a RETURN
+        monkeypatch.setenv("TERM", "xterm")
 
     def setUp(self):
         self.maxDiff = None
@@ -342,6 +353,7 @@ class TestGiftDelegate(BaseTest):
         self.assertEqual(html_path, cmd0(giftp, '--html-path'))
 
     def test_opt_exec_path(self):
+        execpath = cmd0(origit, '--exec-path')
         rst = cmd0(giftp, "--exec-path")
         self.assertEqual(execpath, rst)
 
@@ -495,6 +507,8 @@ class TestGiftDelegate(BaseTest):
                 cmdx(giftp, opt, cwd=self.superp)
 
             self.assertEqual(129, gift_failure.exception.returncode, opt)
+            self.assertEqual(git_failure.exception.returncode, gift_failure.exception.returncode, opt)
+            self.assertEqual(git_failure.exception.out, gift_failure.exception.out, opt)
             self.assertEqual(git_failure.exception.err, gift_failure.exception.err, opt)
 
     def test_env_git_dir(self):
@@ -1252,6 +1266,7 @@ class TestGift(BaseTest):
                 cmdx(giftp, *named, "reset", "--hard", cwd=self.subbarp)
 
             self.assertEqual(git_failure.exception.returncode, gift_failure.exception.returncode, named)
+            self.assertEqual(git_failure.exception.out, gift_failure.exception.out, named)
             self.assertEqual(git_failure.exception.err, gift_failure.exception.err, named)
             self._fcontent("edited\n", self.subbarp, "bar")
 

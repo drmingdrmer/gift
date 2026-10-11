@@ -45,12 +45,6 @@ jobs:
         flake8 gift test_gift.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       env:
-        # interactive command such as k3handy.cmdtty to run git, git complains
-        # if no TERM set:
-        #   out: - (press RETURN)
-        #   err: WARNING: terminal is not fully functional
-        # And waiting for a RETURN to press for ever
-        TERM: xterm
         # The tests run gift through its `uv run` shebang: use the matrix Python
         UV_PYTHON: ${{ matrix.python-version }}
       run: |
