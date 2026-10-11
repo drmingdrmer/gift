@@ -679,6 +679,42 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "init", "--sub", cwd=self.emptyp)
 
+    def test_clone_sub_ignored_file(self):
+        cmdx(giftp, "init", cwd=self.emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+        conf = fread(pjoin(self.emptyp, ".gift"))
+        refs = fread(pjoin(self.emptyp, ".gift-refs"))
+
+        # bargit has a file bar, and the user has another bar, which git ignores
+        excludep = pjoin(self.base, "exclude")
+        fwrite(excludep, "bar\n")
+        excludes = ["-c", "core.excludesFile=" + excludep]
+        depp = pjoin(self.emptyp, "dep")
+        os.mkdir(depp)
+        fwrite(pjoin(depp, "bar"), "local data\n")
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, *excludes, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+
+        self.assertEqual(1, failure.exception.returncode)
+        self.assertEqual(["bar"], os.listdir(depp))
+        self._fcontent("local data\n", depp, "bar")
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp))
+        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", cwd=self.emptyp))
+        self._fcontent(conf, self.emptyp, ".gift")
+        self._fcontent(refs, self.emptyp, ".gift-refs")
+        self.assertEqual(["wow"], os.listdir(pjoin(self.emptyp, ".git", "gift", "subdir")))
+
+        # A file that the clone does not check out stays
+        os.unlink(pjoin(depp, "bar"))
+        fwrite(pjoin(depp, "mine"), "mine\n")
+        cmdx(giftp, *ident_args, *excludes, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+
+        self._fcontent("bar\n", depp, "bar")
+        self._fcontent("mine\n", depp, "mine")
+
     def test_clone_sub_failed_commit(self):
         cmdx(giftp, "init", cwd=self.emptyp)
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
