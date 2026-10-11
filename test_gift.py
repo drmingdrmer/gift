@@ -668,6 +668,15 @@ class TestGift(BaseTest):
         ]), self.emptyp, ".gift-refs")
         self._fcontent("bar\n", self.emptyp, "path/to/bar/bar")
 
+    def test_clone_sub_keeps_other_keys(self):
+        # clone --sub writes back the keys of .gift that gift does not read
+        cmdx(giftp, "init", cwd=self.emptyp)
+        fwrite(pjoin(self.emptyp, ".gift"), "note: kept\ndirs: {}\n")
+
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
+
+        self._fcontent("dirs:\n  bar: ../bargit@master\nnote: kept\n", self.emptyp, ".gift")
+
     def test_clone_sub_failed(self):
         cmdx(giftp, "init", cwd=self.emptyp)
         confp = pjoin(self.emptyp, ".gift")

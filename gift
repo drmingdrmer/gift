@@ -157,6 +157,16 @@ class SubRepoConf(TypedDict):
     env: dict[str, str]
 
 
+# .gift as yaml loads it: {"dirs": {<dir>: "<url>@<branch>", ...}}, with the
+# dirs not checked yet. Writing it back keeps the other keys in it.
+RawConf = dict[str, Any]
+
+
+class Conf(TypedDict):
+    # .gift as Gift.parse_conf() expands it
+    dirs: dict[str, SubRepoConf]
+
+
 class Gift(object):
     """
     """
@@ -302,7 +312,7 @@ class Gift(object):
 
         return relpath
 
-    def read_conf(self) -> dict[str, Any]:
+    def read_conf(self) -> RawConf:
         # Read as an empty .gift, an unreadable one would send a command in a
         # sub-repo dir to the super repo
         content = read_text(self.confpath, conf_filename)
@@ -340,13 +350,13 @@ class Gift(object):
             return []
         return parse_refs(content)
 
-    def parse_conf(self) -> dict[str, Any]:
+    def parse_conf(self) -> Conf:
 
-        conf = self.read_conf()
+        raw_conf = self.read_conf()
 
         # rm = conf.get("remotes", {})
-        dirs = conf["dirs"]
-        conf["dirs"] = {}
+        dirs = raw_conf["dirs"]
+        conf: Conf = {"dirs": {}}
 
         # Each sub-repo is keyed by its checked dir, so that "./foo" and the
         # lookup by cwd, which yields "foo", find the same entry
@@ -772,9 +782,9 @@ class Gift(object):
                 url = "./" + url
             remote = url + sep + branch
 
-        conf = self.read_conf()
-        conf["dirs"][subdir] = remote
-        content = yaml.dump(conf, default_flow_style=False)
+        raw_conf = self.read_conf()
+        raw_conf["dirs"][subdir] = remote
+        content = yaml.dump(raw_conf, default_flow_style=False)
 
         # Commit .gift only after the clone works: a bad entry in HEAD would
         # break every later --sub command, in every clone
