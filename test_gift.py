@@ -375,6 +375,20 @@ class TestGiftDelegate(BaseTest):
             'evaluated working_dir: None',
         ], out)
 
+    def test_opt_exec_path_helpers(self):
+        # A dir of helper commands, without git in it
+        helpers = pjoin(self.base, "helpers")
+        os.mkdir(helpers)
+        hellop = pjoin(helpers, "git-hello")
+        fwrite(hellop, "#!/bin/sh\necho hello\n")
+        os.chmod(hellop, 0o755)
+
+        out = cmdout(giftp, "--exec-path=" + helpers, "rev-parse", "HEAD", cwd=self.superp)
+        self.assertEqual(["c3954c897dfe40a5b99b7145820eeb227210265c"], out)
+
+        out = cmdout(giftp, "--exec-path=" + helpers, "hello", cwd=self.superp)
+        self.assertEqual(["hello"], out)
+
     def test_opt_minus_c(self):
         code, out, err = cmdtty(
             giftp, "-c", "pager.log=head -n 1", "log", "--no-color", cwd=self.superp)

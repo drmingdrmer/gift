@@ -156,10 +156,9 @@ class Gift(object):
 
     def __init__(self, gitopt: GitOpt) -> None:
         self.gitopt = gitopt.clone()
-        if self.gitopt.opt.get('exec_path') is None:
-            self.gitpath = 'git'
-        else:
-            self.gitpath = pjoin(self.gitopt.opt['exec_path'], 'git')
+        # As raw git, gift runs the git in PATH. --exec-path goes to git with
+        # the other options, and only tells where its helper commands are.
+        self.gitpath = 'git'
         self.in_git_dir = False
 
         # When multiple -C options are given, each subsequent non-absolute -C
