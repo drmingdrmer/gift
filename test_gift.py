@@ -188,8 +188,16 @@ class TestGiftParse(unittest.TestCase):
         # The args of the command, after "log", stay as they are
         args = ["-C", "d", "--git-dir", "g", "-c", "a=b", "--work-tree", "w", "--namespace", "n",
                 "--super-prefix", "s", "-p", "log", "--git-dir", "x"]
-        want = ["-C", "d", "--git-dir=g", "-c", "a=b", "--work-tree=w", "--namespace=n",
+        want = ["-C", "d", "--git-dir=g", "--work-tree=w", "-c", "a=b", "--namespace=n",
                 "--super-prefix=s", "-p", "log", "--git-dir", "x"]
+        self.assertEqual(want, gift.join_opt_values(args))
+
+        # The options that pick the repo go before -P, which GitOpt does not
+        # know. The value of --attr-source is not the command.
+        args = ["-P", "--config-env", "a=E", "--attr-source", "HEAD", "--shallow-file", "f",
+                "--git-dir=g", "-C", "d", "--work-tree", "w", "status"]
+        want = ["--git-dir=g", "-C", "d", "--work-tree=w",
+                "-P", "--config-env", "a=E", "--attr-source", "HEAD", "--shallow-file", "f", "status"]
         self.assertEqual(want, gift.join_opt_values(args))
 
         # Without a value, git reports the option
@@ -1060,9 +1068,16 @@ class TestGift(BaseTest):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         fwrite(pjoin(self.subbarp, "bar"), "edited\n")
 
-        # git reads both forms of --git-dir, and bargit is bare: it has no
-        # work tree to reset, and foo/bar is not its work tree
-        for named in (["--git-dir", self.bargitp], ["--git-dir=" + self.bargitp]):
+        # git reads both forms of --git-dir, also after an option that GitOpt
+        # does not know, such as -P. bargit is bare: it has no work tree to
+        # reset, and foo/bar is not its work tree
+        forms = (
+            ["--git-dir", self.bargitp],
+            ["--git-dir=" + self.bargitp],
+            ["-P", "--git-dir=" + self.bargitp],
+            ["--no-optional-locks", "--git-dir", self.bargitp],
+        )
+        for named in forms:
             with self.assertRaises(CalledProcessError, msg=named) as git_failure:
                 cmdx(origit, *named, "reset", "--hard", cwd=self.subbarp)
 
