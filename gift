@@ -83,6 +83,16 @@ def is_outside(relpath: str) -> bool:
     return relpath == os.pardir or relpath.startswith(os.pardir + os.sep)
 
 
+def top_new_dir(path: str) -> str:
+    # The top dir that making the missing dir path also makes. Removing it
+    # removes the parents of path that did not exist before.
+    parent = os.path.dirname(path)
+    while not os.path.lexists(parent):
+        path = parent
+        parent = os.path.dirname(path)
+    return path
+
+
 def read_text(path: str, name: str) -> str | None:
     # None for a missing file. A file that can not be read or decoded is an
     # error that names it, not a traceback.
@@ -788,6 +798,10 @@ class Gift(object):
         old_index = root_git.cmdf("ls-files", "--stage", "--", conf_filename, refs_filename, flag=CMD_RAISE_STDOUT)
         work_tree = pjoin(self.working_dir, subdir)
         work_tree_existed = os.path.exists(work_tree)
+        # A failed clone also removes the parent dirs that it made. An empty
+        # parent sub git dir would refuse a later clone into that dir.
+        new_work_tree = top_new_dir(work_tree)
+        new_sub_gitdir = top_new_dir(sub_gitdir_path)
 
         # As raw git clone, refuse a destination that is not a dir, before
         # anything is written
@@ -828,8 +842,8 @@ class Gift(object):
                         sub_git = self._sub_git(self.conf["dirs"][subdir])
                         sub_git.cmdf("rm", "-r", "-q", "-f", "--ignore-unmatch", ".", cwd=work_tree, flag=CmdFlag.RAISE)
                     elif os.path.isdir(work_tree):
-                        shutil.rmtree(work_tree)
-                    shutil.rmtree(sub_gitdir_path)
+                        shutil.rmtree(new_work_tree)
+                    shutil.rmtree(new_sub_gitdir)
             except Exception as e:
                 display(2, "GIFT: clone --sub: can not undo the failed clone: " + str(e))
             raise

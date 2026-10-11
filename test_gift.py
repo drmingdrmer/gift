@@ -708,6 +708,23 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "init", "--sub", cwd=self.emptyp)
 
+    def test_clone_sub_failed_nested_dir(self):
+        cmdx(giftp, "init", cwd=self.emptyp)
+
+        # The checkout of a bad branch fails after the clone made the dirs
+        # a/b/c and .git/gift/subdir/a/b/c, with their parents
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@nosuch", "a/b/c", cwd=self.emptyp)
+        e = failure.exception
+
+        self.assertEqual(1, e.returncode)
+        self.assertEqual([".git", ".gitignore"], sorted(os.listdir(self.emptyp)))
+        self.assertFalse(os.path.exists(pjoin(self.emptyp, ".git", "gift")))
+
+        # No empty sub git dir is left in a/b to refuse this clone
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "a/b", cwd=self.emptyp)
+        self._fcontent("bar\n", self.emptyp, "a", "b", "bar")
+
     def test_clone_sub_ignored_file(self):
         cmdx(giftp, "init", cwd=self.emptyp)
         cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
