@@ -929,6 +929,41 @@ class TestGift(BaseTest):
         self._gitoutput([giftp, "rev-parse", "--abbrev-ref", "@{upstream}"],
                         ["origin/master"], cwd=self.subbarp)
 
+    def test_init_sub_in_fresh_clone(self):
+        # super records foo/bar and foo/wow, then foo/bar gets a newer commit
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        self._add_commit_to_bar_from_other_clone()
+
+        clonep = pjoin(self.base, "testdata", "superclone")
+        cmdx(origit, "clone", "-q", self.supergitp, clonep)
+        cmdx(giftp, "init", "--sub", cwd=clonep)
+
+        self._gitoutput([origit, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [".gift", ".gift-refs", "foo/bar/bar", "foo/wow/wow", "imsuperman"], cwd=clonep)
+
+        # Each sub-repo checks out the commit in .gift-refs, over the files from super
+        cases = (
+            ("foo/bar", "466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", "bar"),
+            ("foo/wow", "6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", "wow"),
+        )
+        for subdir, commit, fn in cases:
+            workp = pjoin(clonep, subdir)
+            gitdirp = pjoin(clonep, ".git", "gift", "subdir", subdir)
+            sub_args = ["--git-dir=" + gitdirp, "--work-tree=" + workp]
+
+            head = cmd0(origit, *sub_args, "rev-parse", "HEAD")
+            self.assertEqual(commit, head, subdir)
+
+            status = cmdout(origit, *sub_args, "status", "--porcelain", cwd=workp)
+            self.assertEqual([], status, subdir)
+
+            # foo/bar has no for_fetch, which only the newer commit adds
+            files = os.listdir(workp)
+            self.assertEqual([fn], files, subdir)
+            self._fcontent(fn + "\n", workp, fn)
+
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, "add", "foo", cwd=self.superp)
