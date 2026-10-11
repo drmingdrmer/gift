@@ -535,19 +535,19 @@ class Gift(object):
         else:
             return '', None
 
-    def in_sub_repo_dir(self) -> bool:
+    def find_sub_repo_dir(self) -> str | None:
         # Without .gift, a sub git dir tells that a dir is a sub-repo
         relpath = os.path.relpath(self.cwd, self.working_dir)
         if is_outside(relpath):
-            return False
+            return None
 
         while relpath not in ('', '.'):
             sub_gitdir = self.sub_gitdir_fmt.format(dir=relpath)
             if os.path.isfile(pjoin(self.git_dir, sub_gitdir, "HEAD")):
-                return True
+                return relpath
             relpath = os.path.dirname(relpath)
 
-        return False
+        return None
 
     def exec_informative_cmd(self, cmds: list[str]) -> None:
         cmd = cmds[0]
@@ -604,7 +604,7 @@ class Gift(object):
         # plain commands that fix it. In a sub-repo dir, such a command would
         # go to the super repo instead.
         if conf_error is not None:
-            if is_sub or (not self.repo_named and self.in_sub_repo_dir()):
+            if is_sub or (not self.repo_named and self.find_sub_repo_dir() is not None):
                 raise conf_error
             display(2, "GIFT: warning: " + str(conf_error))
             self.conf = {"dirs": {}}
@@ -645,6 +645,17 @@ class Gift(object):
                 sub_git = self._sub_git(subrepo)
                 sub_git.cmdf(*cmds, flag=CMD_RAISE_PASS)
             else:
+                # A sub git dir that .gift does not list, as after .gift is
+                # removed, still marks a sub-repo: a command in its dir must
+                # not fall back to the super repo
+                unlisted = None
+                if not self.repo_named:
+                    unlisted = self.find_sub_repo_dir()
+                if unlisted is not None:
+                    sub_gitdir_path = pjoin(self.git_dir, self.sub_gitdir_fmt.format(dir=unlisted))
+                    msg = "{}: .gift does not list this sub-repo; list it in .gift again, or remove its git dir {}"
+                    raise GiftError(msg.format(unlisted, sub_gitdir_path))
+
                 # Only a command on the super repo that can move HEAD can
                 # change .gift-refs in HEAD
                 follow_head = cmd not in head_fixed_cmds

@@ -1089,6 +1089,47 @@ class TestGift(BaseTest):
             self.assertEqual(git_failure.exception.err, gift_failure.exception.err, named)
             self._fcontent("edited\n", self.subbarp, "bar")
 
+    def test_unlisted_sub_repo(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        confp = pjoin(self.superp, ".gift")
+        bargitdir = pjoin(self.supergitp, "gift", "subdir", "foo", "bar")
+        fwrite(pjoin(self.superp, "imsuperman"), "edited\n")
+        fwrite(pjoin(self.subbarp, "bar"), "edited\n")
+
+        super_head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        super_index = cmdout(origit, "ls-files", "--stage", cwd=self.superp)
+        bar_head = cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD")
+        bar_index = cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage")
+
+        # .gift is missing, is empty, or has no entry for foo/bar
+        want = ["foo/bar: .gift does not list this sub-repo; list it in .gift again, or remove its git dir " + bargitdir]
+        for conf in (None, "", "dirs:\n  foo/wow: ../wowgit@master\n"):
+            if conf is None:
+                os.unlink(confp)
+            else:
+                fwrite(confp, conf)
+
+            with self.assertRaises(CalledProcessError, msg=conf) as failure:
+                cmdx(giftp, "reset", "-q", "--hard", cwd=self.subbarp)
+            e = failure.exception
+
+            self.assertEqual(2, e.returncode, conf)
+            self.assertEqual(want, e.err, conf)
+
+        self._fcontent("edited\n", self.superp, "imsuperman")
+        self._fcontent("edited\n", self.subbarp, "bar")
+        self.assertEqual(super_head, cmd0(origit, "rev-parse", "HEAD", cwd=self.superp))
+        self.assertEqual(super_index, cmdout(origit, "ls-files", "--stage", cwd=self.superp))
+        self.assertEqual(bar_head, cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD"))
+        self.assertEqual(bar_index, cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage"))
+
+        # The super repo named by the user is still the repo to use
+        named = ["--git-dir=" + self.supergitp, "--work-tree=" + self.superp]
+        cmdx(giftp, *named, "reset", "-q", "--hard", cwd=self.subbarp)
+
+        self._fcontent("superman\n", self.superp, "imsuperman")
+        self._fcontent("edited\n", self.subbarp, "bar")
+
     def test_dot_dot_dir(self):
         # "..dep" is a dir in the work tree, not a path to the parent dir
         fwrite(pjoin(self.superp, ".gift"), "dirs:\n  ..dep: ../bargit@master\n")
