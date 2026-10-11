@@ -182,25 +182,6 @@ class TestGiftParse(unittest.TestCase):
         got = {url: gift.is_relative_path(url) for url in cases}
         self.assertEqual(cases, got)
 
-    def test_join_opt_values(self):
-        # The args of the command, after "log", stay as they are
-        args = ["-C", "d", "--git-dir", "g", "-c", "a=b", "--work-tree", "w", "--namespace", "n",
-                "--super-prefix", "s", "-p", "log", "--git-dir", "x"]
-        want = ["-C", "d", "--git-dir=g", "--work-tree=w", "-c", "a=b", "--namespace=n",
-                "--super-prefix=s", "-p", "log", "--git-dir", "x"]
-        self.assertEqual(want, gift.join_opt_values(args))
-
-        # The options that pick the repo go before -P, which GitOpt does not
-        # know. The value of --attr-source is not the command.
-        args = ["-P", "--config-env", "a=E", "--attr-source", "HEAD", "--shallow-file", "f",
-                "--git-dir=g", "-C", "d", "--work-tree", "w", "status"]
-        want = ["--git-dir=g", "-C", "d", "--work-tree=w",
-                "-P", "--config-env", "a=E", "--attr-source", "HEAD", "--shallow-file", "f", "status"]
-        self.assertEqual(want, gift.join_opt_values(args))
-
-        # Without a value, git reports the option
-        self.assertEqual(["--git-dir"], gift.join_opt_values(["--git-dir"]))
-
     def test_is_outside(self):
         cases = {
             "..": True,
@@ -383,6 +364,7 @@ class TestGiftDelegate(BaseTest):
             '  git_dir: null',
             '  namespace: null',
             '  no_replace_objects: false',
+            '  others: []',
             '  paging: true',
             '  startpath: []',
             '  super_prefix: null',
@@ -871,6 +853,15 @@ class TestGift(BaseTest):
             self.superp, ".gift-refs",
         )
 
+    def test_commit_sub_after_git_option(self):
+        # -P before the command is a git option, not the command
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, "-P", *ident_args, "commit", "--sub", cwd=self.superp)
+
+        self._gitoutput([giftp, "ls-files"],
+                        [".gift", ".gift-refs", "foo/bar/bar", "foo/wow/wow", "imsuperman"],
+                        cwd=self.superp)
+
     def test_commit_sub_in_sub_dir(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=pjoin(self.superp, "foo"))
@@ -1066,9 +1057,9 @@ class TestGift(BaseTest):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         fwrite(pjoin(self.subbarp, "bar"), "edited\n")
 
-        # git reads both forms of --git-dir, also after an option that GitOpt
-        # does not know, such as -P. bargit is bare: it has no work tree to
-        # reset, and foo/bar is not its work tree
+        # git reads both forms of --git-dir, also after another git option,
+        # such as -P. bargit is bare: it has no work tree to reset, and
+        # foo/bar is not its work tree
         forms = (
             ["--git-dir", self.bargitp],
             ["--git-dir=" + self.bargitp],
