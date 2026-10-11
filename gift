@@ -186,8 +186,9 @@ class Gift(object):
         self.git_dir = prebase(self.startpath, git_dir)
         self.working_dir = prebase(self.startpath, work_tree)
 
-        # A repo named by the user is used even in a sub-repo dir
-        self.repo_named = git_dir is not None or work_tree is not None
+        # A repo named by the user is used even in a sub-repo dir. --bare
+        # names the cwd as the git dir.
+        self.repo_named = git_dir is not None or work_tree is not None or self.gitopt.opt['bare']
 
     def init_git_config(self) -> None:
 

@@ -1071,12 +1071,13 @@ class TestGift(BaseTest):
 
         # git reads both forms of --git-dir, also after another git option,
         # such as -P. bargit is bare: it has no work tree to reset, and
-        # foo/bar is not its work tree
+        # foo/bar is not its work tree. --bare names foo/bar as the git dir.
         forms = (
             ["--git-dir", self.bargitp],
             ["--git-dir=" + self.bargitp],
             ["-P", "--git-dir=" + self.bargitp],
             ["--no-optional-locks", "--git-dir", self.bargitp],
+            ["--bare"],
         )
         for named in forms:
             with self.assertRaises(CalledProcessError, msg=named) as git_failure:
