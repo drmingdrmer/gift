@@ -584,8 +584,8 @@ class Gift(object):
         dd("gift cmd:", cmds)
 
         # If a command does not need to be run inside a git repo, delegate it
-        # and quit.
-        if cmds[0] in ("init", "clone") and '--sub' not in cmds:
+        # and quit. As in _strip_sub_flag(), only the first arg is --sub.
+        if cmds[0] in ("init", "clone") and cmds[1:2] != ['--sub']:
             # delegate to original git
             self._super_git().cmdf(*cmds, flag=CMD_RAISE_PASS)
             return
@@ -688,15 +688,11 @@ class Gift(object):
         cmd = cmds[0]
         cmds = cmds[1:]
 
-        if '--' in cmds:
-            i = cmds.index('--')
-            args = cmds[:i]
-        else:
-            args = cmds
-
-        is_sub = '--sub' in args
+        # Only the first arg is the gift flag. A later "--sub" may be the
+        # value of an option, as in `commit -m --sub`, or a path.
+        is_sub = cmds[:1] == ['--sub']
         if is_sub:
-            cmds.remove('--sub')
+            cmds = cmds[1:]
 
         return cmd, is_sub, [cmd] + cmds
 

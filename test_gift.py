@@ -1724,6 +1724,18 @@ class TestGift(BaseTest):
         self.assertEqual(2, e.returncode)
         self.assertEqual(["commit --sub accepts only -m <msg>, got: --amend"], e.err)
 
+    def test_sub_as_value(self):
+        # "--sub" as the value of an option, or as a path, is not the gift flag
+        fwrite(pjoin(self.superp, "--sub"), "--sub\n")
+        cmdx(giftp, "add", "--", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "--sub", cwd=self.superp)
+        fwrite(pjoin(self.superp, "imsuperman"), "edited\n")
+        cmdx(giftp, *ident_args, "commit", "--message", "--sub", "imsuperman", cwd=self.superp)
+
+        self._gitoutput([origit, "log", "--format=%s"], ["--sub", "--sub", "add super", "add .gift"], cwd=self.superp)
+        self._gitoutput([giftp, "log", "--grep", "--sub", "--format=%s"], ["--sub", "--sub"], cwd=self.superp)
+        self._gitoutput([giftp, "log", "--format=%s", "--", "--sub"], ["--sub"], cwd=self.superp)
+
     def test_sub_args(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
