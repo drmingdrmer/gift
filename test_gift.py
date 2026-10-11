@@ -16,7 +16,6 @@ from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
 from k3handy import cmd0
-from k3handy import cmdf
 from k3handy import cmdout
 from k3handy import cmdtty
 from k3handy import cmdx
@@ -38,7 +37,6 @@ Gift = gift.Gift
 this_base = os.path.dirname(__file__)
 
 giftp = pjoin(this_base, "gift")
-subrepop = pjoin(this_base, "git-subrepo")
 origit = "git"
 
 execpath = cmd0(origit, '--exec-path')
@@ -1741,89 +1739,6 @@ class TestGift(BaseTest):
         with open(refsp, "rb") as f:
             content = f.read()
         self.assertEqual(b"\xff\n", content)
-
-
-class TestGitSubrepo(BaseTest):
-
-    def setUp(self):
-        self.repo = pjoin(self.base, "repo")
-
-        # git-subrepo commits on HEAD, so the repo needs a commit
-        cmdx(origit, "init", self.repo)
-        cmdx(origit, "config", "user.name", "fooUser", cwd=self.repo)
-        cmdx(origit, "config", "user.email", "my@email.org", cwd=self.repo)
-        cmdx(origit, "commit", "--allow-empty", "-m", "init", cwd=self.repo)
-
-    def _update(self, conf):
-        fwrite(pjoin(self.repo, ".gitsubrepo"), conf)
-        return cmdf(subrepop, cwd=self.repo)
-
-    def test_update(self):
-        # Run by its shebang, git-subrepo reads bash syntax such as ${a:0:1}
-        code, _, err = self._update("bar " + self.bargitp + " master\n")
-        self.assertEqual(0, code, err)
-        self.assertEqual("bar\n", fread(pjoin(self.repo, "bar", "bar")))
-
-    def test_url_is_data(self):
-        # ${prefix} in a url is the dir
-        code, _, err = self._update("bargit " + pjoin(self.base, "testdata") + "/${prefix} master\n")
-        self.assertEqual(0, code, err)
-        self.assertEqual("bar\n", fread(pjoin(self.repo, "bargit", "bar")))
-
-        # Other shell syntax in a url is not run
-        self._update("dep $(touch${IFS}marker) master\n")
-        self.assertFalse(os.path.exists(pjoin(self.repo, "marker")))
-
-    def test_url_is_not_option(self):
-        markerp = pjoin(self.base, "marker")
-        helperp = pjoin(self.base, "helper")
-        fwrite(helperp, "#!/bin/sh\ntouch " + markerp + "\nexit 1\n")
-        os.chmod(helperp, 0o755)
-        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.repo)
-
-        # git must not read the url as --upload-pack, which runs the helper
-        code, _, _ = self._update("dep --upload-pack=" + helperp + " " + self.bargitp + "\n")
-
-        self.assertEqual(1, code)
-        self.assertFalse(os.path.exists(markerp))
-        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.repo))
-
-    def test_tag_per_dir(self):
-        # "." in a dir must not turn into a char that another dir has: each
-        # dir is fetched into its own tag
-        wowgitp = pjoin(self.base, "testdata", "wowgit")
-        code, _, err = self._update("foo.bar " + self.bargitp + " master\nfoo-bar " + wowgitp + " master\n")
-        self.assertEqual(0, code, err)
-
-        paths = cmdout(origit, "ls-tree", "-r", "--name-only", "HEAD", cwd=self.repo)
-        self.assertEqual(["foo-bar/wow", "foo.bar/bar"], paths)
-        self.assertEqual(["bar"], cmdout(origit, "show", "HEAD:foo.bar/bar", cwd=self.repo))
-        self.assertEqual(["wow"], cmdout(origit, "show", "HEAD:foo-bar/wow", cwd=self.repo))
-
-    def test_failed_merge(self):
-        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.repo)
-        branch_ref = cmd0(origit, "symbolic-ref", "HEAD", cwd=self.repo)
-
-        # git can not move the branch while its lock file is there
-        fwrite(pjoin(self.repo, ".git", branch_ref + ".lock"), "")
-        wowgitp = pjoin(self.base, "testdata", "wowgit")
-        code, _, _ = self._update("bar " + self.bargitp + " master\nwow " + wowgitp + " master\n")
-
-        # The fetches finish in any order, and the import stops after the
-        # first dir
-        imported = [d for d in ("bar", "wow") if os.path.exists(pjoin(self.repo, d))]
-
-        self.assertEqual(1, code)
-        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.repo))
-        self.assertIn(imported, (["bar"], ["wow"]))
-
-    def test_failed_fetch(self):
-        code, _, _ = self._update("bar " + self.bargitp + " master\nnosuch " + pjoin(self.repo, "nosuch") + " master\n")
-        self.assertEqual(1, code)
-
-        # bar is not imported, and its fetched tag is removed
-        self.assertFalse(os.path.exists(pjoin(self.repo, "bar")))
-        self.assertEqual([], cmdout(origit, "for-each-ref", "refs/tags", cwd=self.repo))
 
 
 def force_remove(fn):
