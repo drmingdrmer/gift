@@ -95,10 +95,11 @@ class BaseTest(unittest.TestCase):
 
     def _git_trace(self, *cmds, cwd):
         # The git commands that one gift command runs
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tracep = pjoin(tmpdir, "trace")
-            cmdx(giftp, *cmds, cwd=cwd, env={"GIT_TRACE": tracep})
-            lines = fread(tracep).splitlines()
+        # pytest keeps self.base of a failed test, and with it this trace
+        tracedir = tempfile.mkdtemp(prefix="trace-", dir=self.base)
+        tracep = pjoin(tracedir, "trace")
+        cmdx(giftp, *cmds, cwd=cwd, env={"GIT_TRACE": tracep})
+        lines = fread(tracep).splitlines()
 
         traced = []
         for line in lines:
