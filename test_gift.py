@@ -729,6 +729,59 @@ class TestGift(BaseTest):
         self._fcontent("bar\n", depp, "bar")
         self._fcontent("mine\n", depp, "mine")
 
+    def test_clone_sub_to_file(self):
+        cmdx(giftp, "init", cwd=self.emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+        conf = fread(pjoin(self.emptyp, ".gift"))
+        refs = fread(pjoin(self.emptyp, ".gift-refs"))
+
+        depp = pjoin(self.emptyp, "dep")
+        fwrite(depp, "a file\n")
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["clone --sub: dep exists and is not a dir"], e.err)
+        self._fcontent("a file\n", depp)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp))
+        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", cwd=self.emptyp))
+        self._fcontent(conf, self.emptyp, ".gift")
+        self._fcontent(refs, self.emptyp, ".gift-refs")
+        self.assertEqual(["wow"], os.listdir(pjoin(self.emptyp, ".git", "gift", "subdir")))
+
+        # Without the file, the same clone works
+        os.unlink(depp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+        self._fcontent("bar\n", depp, "bar")
+
+    def test_clone_sub_failed_undo(self):
+        if os.geteuid() == 0:
+            self.skipTest("root writes a file without write permission")
+
+        cmdx(giftp, "init", cwd=self.emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
+
+        # The commit fails, then the undo can not write .gift back
+        hookp = pjoin(self.emptyp, ".git", "hooks", "pre-commit")
+        fwrite(hookp, "#!/bin/sh\nchmod a-w .gift\necho hook failed >&2\nexit 1\n")
+        os.chmod(hookp, 0o755)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        e = failure.exception
+
+        # gift still reports the error of the commit
+        confp = pjoin(self.emptyp, ".gift")
+        self.assertEqual(1, e.returncode)
+        self.assertEqual([
+            "GIFT: clone --sub: can not undo the failed clone: [Errno 13] Permission denied: '" + confp + "'",
+            "hook failed",
+        ], e.err[-2:])
+
     def test_clone_sub_failed_commit(self):
         cmdx(giftp, "init", cwd=self.emptyp)
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
