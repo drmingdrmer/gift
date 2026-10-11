@@ -193,19 +193,21 @@ class Gift(object):
 
         git_dir_specified = self.git_dir is not None
 
-        if self.git_dir is None:
-            # One git process for both dirs. In a git dir, --show-toplevel
-            # fails after the git dir is printed.
-            _, out, _ = cmdf(self.gitpath, "rev-parse", "--absolute-git-dir", "--show-toplevel", cwd=self.cwd)
-            if len(out) > 0:
-                self.git_dir = out[0]
-            if len(out) > 1 and self.working_dir is None:
-                self.working_dir = out[1]
-        else:
-            # A named .git file, as after git init --separate-git-dir or in a
-            # linked worktree, leads to the git dir that holds the sub git dirs
-            self.git_dir = cmdf(self.gitpath, "--git-dir=" + self.git_dir, "rev-parse", "--absolute-git-dir",
-                                cwd=self.cwd, flag=CMD_NONE_ONELINE)
+        # A named .git file, as after git init --separate-git-dir or in a
+        # linked worktree, leads to the git dir that holds the sub git dirs.
+        # The work tree of a named git dir is core.worktree, or else the cwd.
+        named = []
+        if git_dir_specified:
+            named = ["--git-dir=" + self.git_dir]
+
+        # One git process for both dirs. In a git dir, --show-toplevel
+        # fails after the git dir is printed.
+        _, out, _ = cmdf(self.gitpath, *named, "rev-parse", "--absolute-git-dir", "--show-toplevel", cwd=self.cwd)
+        self.git_dir = None
+        if len(out) > 0:
+            self.git_dir = out[0]
+        if len(out) > 1 and self.working_dir is None:
+            self.working_dir = out[1]
 
         dd("git_dir:", self.git_dir)
 
@@ -220,7 +222,7 @@ class Gift(object):
             return
 
         # git rev-parse --show-toplevel:
-        # - With --git-dir=xx, it always returns current dir.
+        # - With --git-dir=xx of a bare repo, it fails: use the current dir.
         # - Without --git-dir=xx, it might fail if cwd is not in a git repo
         if git_dir_specified:
             if self.working_dir is None:

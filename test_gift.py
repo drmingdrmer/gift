@@ -1688,6 +1688,24 @@ class TestGift(BaseTest):
             self._fcontent("bar\n", workp, "dep", "bar")
             self._gitoutput([origit, "ls-tree", "-r", "--name-only", "HEAD"], [".gift", ".gift-refs", "dep/bar"], cwd=workp)
 
+    def test_named_git_dir_core_worktree(self):
+        # As git, gift takes the work tree of a named git dir from
+        # core.worktree, not from the cwd outside it
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(origit, "--git-dir=" + self.supergitp, "config", "core.worktree", self.superp)
+
+        cmdx(giftp, *ident_args, "--git-dir=" + self.supergitp, "commit", "--sub", cwd=self.base)
+
+        self._gitoutput([origit, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [".gift", ".gift-refs", "foo/bar/bar", "foo/wow/wow", "imsuperman"], cwd=self.superp)
+        self._gitoutput([origit, "show", "HEAD:.gift-refs"],
+                        [
+                            "- - foo/bar",
+                            "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
+                            "- - foo/wow",
+                            "  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54",
+                        ], cwd=self.superp)
+
     def test_gift_dir_symlink(self):
         # superp/link leads to superp/nested/deep: the OS reads link/../../x
         # as superp/x, but git reads it as x beside superp
