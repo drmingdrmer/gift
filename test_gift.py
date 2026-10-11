@@ -1532,6 +1532,32 @@ class TestGift(BaseTest):
 
         self._nofile(tmpdir, "x", "admin", "sub", "bar")
 
+    def test_named_git_dir_file(self):
+        # A .git file names the git dir: after git init --separate-git-dir,
+        # and in a linked worktree
+        mainp = pjoin(self.base, "main")
+        main_gitp = pjoin(self.base, "main.git")
+        os.mkdir(mainp)
+        cmdx(origit, "init", "--separate-git-dir=" + main_gitp, cwd=mainp)
+        fwrite(pjoin(mainp, ".gift"), "dirs:\n  dep: " + self.bargitp + "@master\n")
+        cmdx(origit, "add", ".gift", cwd=mainp)
+        cmdx(origit, *ident_args, "commit", "-m", "add .gift", cwd=mainp)
+
+        wtp = pjoin(self.base, "wt")
+        cmdx(origit, "worktree", "add", "-q", wtp, cwd=mainp)
+
+        cases = (
+            (mainp, main_gitp),
+            (wtp, pjoin(main_gitp, "worktrees", "wt")),
+        )
+        for workp, git_dir in cases:
+            cmdx(giftp, "--git-dir=.git", "init", "--sub", cwd=workp)
+            cmdx(giftp, *ident_args, "--git-dir=.git", "commit", "--sub", cwd=workp)
+
+            self.assertTrue(os.path.isfile(pjoin(git_dir, "gift", "subdir", "dep", "HEAD")), workp)
+            self._fcontent("bar\n", workp, "dep", "bar")
+            self._gitoutput([origit, "ls-tree", "-r", "--name-only", "HEAD"], [".gift", ".gift-refs", "dep/bar"], cwd=workp)
+
     def test_gift_dir_symlink(self):
         # superp/link leads to superp/nested/deep: the OS reads link/../../x
         # as superp/x, but git reads it as x beside superp

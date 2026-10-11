@@ -201,6 +201,11 @@ class Gift(object):
                 self.git_dir = out[0]
             if len(out) > 1 and self.working_dir is None:
                 self.working_dir = out[1]
+        else:
+            # A named .git file, as after git init --separate-git-dir or in a
+            # linked worktree, leads to the git dir that holds the sub git dirs
+            self.git_dir = cmdf(self.gitpath, "--git-dir=" + self.git_dir, "rev-parse", "--absolute-git-dir",
+                                cwd=self.cwd, flag=CMD_NONE_ONELINE)
 
         dd("git_dir:", self.git_dir)
 
