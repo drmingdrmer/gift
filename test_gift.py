@@ -470,6 +470,18 @@ class TestGiftDelegate(BaseTest):
             self.assertEqual([], e.out, cmds)
             self.assertEqual(want, e.err, cmds)
 
+    def test_opt_without_value(self):
+        # git reports a last option that has no value
+        for opt in ("--git-dir", "-C"):
+            with self.assertRaises(CalledProcessError, msg=opt) as git_failure:
+                cmdx(origit, opt, cwd=self.superp)
+
+            with self.assertRaises(CalledProcessError, msg=opt) as gift_failure:
+                cmdx(giftp, opt, cwd=self.superp)
+
+            self.assertEqual(129, gift_failure.exception.returncode, opt)
+            self.assertEqual(git_failure.exception.err, gift_failure.exception.err, opt)
+
     def test_env_git_dir(self):
         out = cmdout(giftp, "log", "-1", "--format=%s",
                      cwd=self.base, env={"GIT_DIR": self.bargitp})
