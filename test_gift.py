@@ -1064,6 +1064,32 @@ class TestGift(BaseTest):
         cmdx(giftp, "fetch", "--sub", cwd=self.subbarp)
         self.assertEqual(headhash, cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp))
 
+    def test_fetch_sub_changed_branch(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        bargitdir = pjoin(self.supergitp, "gift", "subdir", "foo", "bar")
+        head = cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD")
+        index = cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage")
+
+        # bargit gets a branch dev with a new file, and .gift moves foo/bar to dev
+        cmdx(origit, "clone", self.bargitp, self.barp)
+        cmdx(origit, "checkout", "-b", "dev", cwd=self.barp)
+        fwrite(pjoin(self.barp, "dev"), "dev")
+        cmdx(origit, "add", "dev", cwd=self.barp)
+        cmdx(origit, *ident_args, "commit", "-m", "add dev", cwd=self.barp)
+        cmdx(origit, "push", "origin", "dev", cwd=self.barp)
+        dev_head = cmd0(origit, "rev-parse", "HEAD", cwd=self.barp)
+        fwrite(pjoin(self.superp, ".gift"), "dirs:\n  foo/bar: ../bargit@dev\n  foo/wow: ../wowgit@master\n")
+
+        cmdx(giftp, "fetch", "--sub", cwd=self.superp)
+
+        # fetch brings in dev, and leaves the branch and the files of foo/bar
+        self.assertEqual(dev_head, cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "origin/dev"))
+        self.assertEqual("refs/heads/master", cmd0(origit, "--git-dir=" + bargitdir, "symbolic-ref", "HEAD"))
+        self.assertEqual(head, cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD"))
+        self.assertEqual(index, cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage"))
+        self.assertEqual(["bar"], os.listdir(self.subbarp))
+        self._fcontent("bar\n", self.subbarp, "bar")
+
     def test_fetch_sub_git_opts(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
 

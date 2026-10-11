@@ -425,6 +425,7 @@ class Gift(object):
     def check_worktree(self, subrepo: SubRepoConf) -> None:
         self.try_init_sub_git(subrepo)
         self.try_init_sub_worktree(subrepo)
+        self.try_switch_branch(self._sub_git(subrepo), subrepo)
 
     def try_init_sub_git(self, subrepo: SubRepoConf) -> None:
 
@@ -488,7 +489,9 @@ class Gift(object):
                 sub_git.reset_to_commit('mixed', recorded)
                 sub_git.cmdf('branch', '--set-upstream-to=' + upstream_branch, flag=CmdFlag.RAISE)
 
-        self.try_switch_branch(sub_git, subrepo)
+            # A new sub-repo is set to the .gift branch, see try_switch_branch().
+            # An existing one is not switched here, for fetch --sub.
+            sub_git.cmdf("config", "gift.branch", upstream["branch"], flag=CmdFlag.RAISE)
 
     def try_switch_branch(self, sub_git: Git, subrepo: SubRepoConf) -> None:
         # gift.branch is the .gift branch that the sub-repo was last set to.
