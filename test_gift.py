@@ -372,7 +372,6 @@ class TestGiftDelegate(BaseTest):
             'informative_cmds: {}',
             'opt:',
             '  bare: false',
-            '  confkv: []',
             '  exec_path: /foo/',
             '  git_dir: null',
             '  namespace: null',
@@ -410,6 +409,20 @@ class TestGiftDelegate(BaseTest):
             'commit c3954c897dfe40a5b99b7145820eeb227210265c (HEAD -> master)'
         ], out)
         self.assertEqual([], err)
+
+    def test_opt_config_order(self):
+        # As in git, the last of -c and --config-env sets the value
+        env = {"GIFT_TEST_VALUE": "from-env"}
+        cases = (
+            (["--config-env=probe.key=GIFT_TEST_VALUE", "-c", "probe.key=from-c"], ["from-c"]),
+            (["-c", "probe.key=from-c", "--config-env=probe.key=GIFT_TEST_VALUE"], ["from-env"]),
+        )
+        for opts, want in cases:
+            git_out = cmdout(origit, *opts, "config", "--get", "probe.key", cwd=self.superp, env=env)
+            gift_out = cmdout(giftp, *opts, "config", "--get", "probe.key", cwd=self.superp, env=env)
+
+            self.assertEqual(want, git_out, opts)
+            self.assertEqual(want, gift_out, opts)
 
     def test_opt_git_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1668,6 +1681,69 @@ class TestGift(BaseTest):
                         [".dot/x/wow", ".gift", ".gift-refs", "imsuperman", "my dep/bar"], cwd=self.superp)
         self._gitoutput([origit, "for-each-ref", "--format=%(refname)", "refs/gift/sub"],
                         ["refs/gift/sub/%2Edot%2Fx", "refs/gift/sub/my%20dep"], cwd=self.superp)
+
+    def test_gift_dir_quoted_by_git(self):
+        # Without -z, git quotes these dir names. A sub-repo in such a dir
+        # must replace the dir that holds keep, not add a second one
+        names = ["a\tb", 'a"b', "依赖"]
+        fwrite(pjoin(self.superp, ".gift"), r'''dirs:
+  "a\tb/lib": ../bargit@master
+  'a"b/lib': ../bargit@master
+  依赖/lib: ../bargit@master
+''')
+        for name in names:
+            keepp = pjoin(self.superp, name, "keep")
+            os.mkdir(pjoin(self.superp, name))
+            fwrite(keepp, "keep")
+            os.chmod(keepp, 0o755)
+        cmdx(origit, "add", ".", cwd=self.superp)
+        cmdx(origit, *ident_args, "commit", "-m", "add keep", cwd=self.superp)
+
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        out = cmd0(origit, "ls-tree", "-r", "-t", "-z", "--name-only", "HEAD", cwd=self.superp)
+        entries = out.rstrip("\0").split("\0")
+        self.assertEqual([
+            ".gift",
+            ".gift-refs",
+            "a\tb", "a\tb/keep", "a\tb/lib", "a\tb/lib/bar",
+            'a"b', 'a"b/keep', 'a"b/lib', 'a"b/lib/bar',
+            "imsuperman",
+            "依赖", "依赖/keep", "依赖/lib", "依赖/lib/bar",
+        ], entries)
+
+        # The executable keep is not in the diff: its blob and mode are kept
+        out = cmd0(origit, "diff-tree", "-r", "-z", "--name-status", "HEAD~1", "HEAD", cwd=self.superp)
+        entries = out.rstrip("\0").split("\0")
+        self.assertEqual([
+            "A", ".gift-refs",
+            "A", "a\tb/lib/bar",
+            "A", 'a"b/lib/bar',
+            "A", "依赖/lib/bar",
+        ], entries)
+
+        for name in names:
+            self._gitoutput([origit, "cat-file", "-p", "HEAD:" + name + "/lib/bar"], ["bar"], cwd=self.superp)
+        self._gitoutput([origit, "fsck", "--strict", "--no-dangling"], [], cwd=self.superp)
+
+        # Import a new commit of a sub-repo, then import no change
+        libp = pjoin(self.superp, "依赖", "lib")
+        fwrite(pjoin(libp, "newbar"), "newbar")
+        cmdx(giftp, "add", "newbar", cwd=libp)
+        cmdx(giftp, *ident_args, "commit", "-m", "add newbar", cwd=libp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        out = cmd0(origit, "diff-tree", "-r", "-z", "--name-status", "HEAD~1", "HEAD", cwd=self.superp)
+        entries = out.rstrip("\0").split("\0")
+        self.assertEqual(["M", ".gift-refs", "A", "依赖/lib/newbar"], entries)
+        self._gitoutput([origit, "cat-file", "-p", "HEAD:依赖/lib/newbar"], ["newbar"], cwd=self.superp)
+        self._gitoutput([origit, "fsck", "--strict", "--no-dangling"], [], cwd=self.superp)
+
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        new_head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        self.assertEqual(head, new_head)
 
     def test_gift_dir_with_git_dir(self):
         tmpdir = pjoin(self.base, "repo")
