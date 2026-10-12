@@ -1808,6 +1808,47 @@ class TestGift(BaseTest):
         self.assertEqual(refs, fread(pjoin(self.superp, ".gift-refs"), mode="b"))
         self._gitoutput([origit, "show", ":foo/bar/bar"], ["staged only"], cwd=self.superp)
 
+    def test_commit_sub_retry_updates_super_head(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        # foo/bar has a new commit to import, but its super/head is locked
+        self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
+        lockp = pjoin(self.supergitp, "gift", "subdir", "foo", "bar", "refs", "remotes", "super", "head.lock")
+        fwrite(lockp, "")
+        warning = "GIFT: foo/bar: warning: commit " + newbar + " is not pushed to origin, so other clones can not check it out"
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        e = failure.exception
+
+        # HEAD has the import, and the error tells how to finish it. The
+        # lines after these are the error of git.
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([
+            warning,
+            "commit --sub: committed " + head + ", but can not update refs/remotes/super/head;"
+            " run gift commit --sub again to update it",
+            "foo/bar: can not update refs/remotes/super/head to " + newbar,
+        ], e.err[:3])
+        self._gitoutput([origit, "show", "HEAD:.gift-refs"],
+                        ["- - foo/bar", "  - " + newbar, "- - foo/wow", "  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54"],
+                        cwd=self.superp)
+
+        # Without the lock, a retry commits nothing and updates super/head
+        os.unlink(lockp)
+        _, _, err = cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        bar_super_head = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=self.subbarp)
+        wow_super_head = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=self.subwowp)
+        self.assertEqual([warning, "GIFT: nothing to commit: no sub-repo changed"], err)
+        self.assertEqual(head, head_after)
+        self.assertEqual(newbar, bar_super_head)
+        self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", wow_super_head)
+
     def test_commit_sub_dir_not_pattern(self):
         # The dir "a*" is not a pattern that also matches ab/new
         fwrite(pjoin(self.superp, ".gift"), "dirs:\n  a*: ../bargit@master\n")

@@ -1025,6 +1025,9 @@ class Gift(object):
             super_tree = super_git.tree_add_obj(super_tree, refs_filename, refs_blob)
 
             if super_tree == head_tree:
+                # A commit that could not update super/head left it to this
+                # retry, which finds HEAD already has the tree
+                self._update_super_head_refs(refs)
                 display(2, "GIFT: nothing to commit: no sub-repo changed")
                 return
 
@@ -1037,7 +1040,12 @@ class Gift(object):
             self._restore_state(super_git, saved, "commit --sub: can not undo the failed commit")
             raise
 
-        self._update_super_head_refs(refs)
+        # HEAD has the commit, so the error must not read as a failed commit
+        try:
+            self._update_super_head_refs(refs)
+        except GiftError as e:
+            msg = "commit --sub: committed {}, but can not update {}; run gift commit --sub again to update it\n{}"
+            raise GiftError(msg.format(new_commit, super_head_ref, e))
 
     def x_fetch_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
