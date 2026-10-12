@@ -2204,6 +2204,46 @@ class TestGift(BaseTest):
         self._fcontent("bar\n", self.superp, "dep", "bar")
         self._fcontent("wow\n", self.superp, "dependency", "wow")
 
+    def test_case_alias_dirs(self):
+        # The filesystem of the test may ignore case, as on macOS, where
+        # "Dep" and "dep" are one dir
+        fwrite(pjoin(self.base, "probe"), "")
+        ignore_case = os.path.exists(pjoin(self.base, "PROBE"))
+
+        bar = ["466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", self.bargitp]
+        wow = ["6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", pjoin(self.base, "testdata", "wowgit")]
+        cases = (
+            ("alias", "dep", ".gift: 'dep': dir 'Dep' is listed twice"),
+            ("nested", "dep/wow", ".gift: 'dep/wow' is inside sub-repo dir 'Dep'"),
+        )
+        for name, wowdir, want in cases:
+            superp = pjoin(self.base, "testdata", name)
+            cmdx(origit, "init", "-q", superp)
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  Dep: ../bargit@master\n  " + wowdir + ": ../wowgit@master\n")
+
+            if ignore_case:
+                # gift refuses the dirs before it makes any sub git dir
+                with self.assertRaises(CalledProcessError, msg=name) as failure:
+                    cmdx(giftp, "init", "--sub", cwd=superp)
+                e = failure.exception
+
+                sub_gitdirs_exist = os.path.exists(pjoin(superp, ".git", "gift"))
+                self.assertEqual(2, e.returncode, name)
+                self.assertEqual([want], e.err, name)
+                self.assertFalse(sub_gitdirs_exist, name)
+                continue
+
+            # Each dir has a sub-repo of its own
+            cmdx(giftp, "init", "--sub", cwd=superp)
+
+            actual = {}
+            for subdir in ("Dep", wowdir):
+                gitdirp = pjoin(superp, ".git", "gift", "subdir", subdir)
+                head = cmd0(origit, "--git-dir=" + gitdirp, "rev-parse", "HEAD")
+                url = cmd0(origit, "--git-dir=" + gitdirp, "config", "remote.origin.url")
+                actual[subdir] = [head, url]
+            self.assertEqual({"Dep": bar, wowdir: wow}, actual, name)
+
     def test_relative_url_from_sub_dir(self):
         # ../bargit in .gift is relative to superp, not to subbarp
         os.makedirs(self.subbarp)
