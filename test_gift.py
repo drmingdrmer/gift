@@ -1016,6 +1016,37 @@ class TestGift(BaseTest):
         self._fcontent("bar\n", self.subbarp, "bar")
         self._fcontent("wow\n", self.subwowp, "wow")
 
+    def test_init_sub_gift_example(self):
+        # Each url of _gift_example is rewritten to bargit, so the test runs
+        # offline. The relative url ../gift is a bare clone of bargit.
+        cmdx(giftp, "init", cwd=self.emptyp)
+        shutil.copyfile(pjoin(this_base, "_gift_example"), pjoin(self.emptyp, ".gift"))
+        localp = pjoin(self.base, "testdata", "gift")
+        cmdx(origit, "clone", "-q", "--bare", self.bargitp, localp)
+
+        https_url = "https://github.com/drmingdrmer/gift.git"
+        ssh_url = "ssh://git@github.com/drmingdrmer/gift.git"
+        scp_url = "git@github.com:drmingdrmer/gift.git"
+        opts = []
+        for url in (https_url, ssh_url, scp_url):
+            opts.extend(["-c", "url." + self.bargitp + ".insteadOf=" + url])
+        cmdx(giftp, *opts, "init", "--sub", cwd=self.emptyp)
+
+        actual = {}
+        for subdir in ("deps/https/gift", "deps/ssh/gift", "deps/scp/gift", "deps/local/gift"):
+            gitdirp = pjoin(self.emptyp, ".git", "gift", "subdir", subdir)
+            url = cmd0(origit, "--git-dir=" + gitdirp, "config", "remote.origin.url")
+            branch = cmd0(origit, "--git-dir=" + gitdirp, "symbolic-ref", "--short", "HEAD")
+            content = fread(pjoin(self.emptyp, subdir, "bar"))
+            actual[subdir] = [url, branch, content]
+
+        self.assertEqual({
+            "deps/https/gift": [https_url, "master", "bar\n"],
+            "deps/ssh/gift": [ssh_url, "master", "bar\n"],
+            "deps/scp/gift": [scp_url, "master", "bar\n"],
+            "deps/local/gift": [localp, "master", "bar\n"],
+        }, actual)
+
     def test_init_sub_with_files_from_super(self):
 
         cmdx(giftp, "init", "--sub", cwd=self.superp)
