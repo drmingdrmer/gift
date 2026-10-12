@@ -1488,6 +1488,47 @@ class TestGift(BaseTest):
                         ["imsuperman"], cwd=self.superp)
         self._gitoutput([giftp, "show", ":imsuperman"], ["staged"], cwd=self.superp)
 
+    def test_commit_sub_failed_head_update(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        # The staged foo/bar/bar is in neither HEAD nor the work tree
+        fwrite(pjoin(self.subbarp, "bar"), "staged only\n")
+        cmdx(origit, "add", "foo/bar/bar", cwd=self.superp)
+        fwrite(pjoin(self.subbarp, "bar"), "bar\n")
+
+        # commit --sub has a foo/bar commit to import, but can not lock the
+        # branch to update HEAD
+        self._add_file_to_subbar()
+        fwrite(pjoin(self.supergitp, "refs", "heads", "master.lock"), "")
+
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.superp)
+        refs = fread(pjoin(self.superp, ".gift-refs"), mode="b")
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        self.assertEqual(128, failure.exception.returncode)
+        self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.superp))
+        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", cwd=self.superp))
+        self.assertEqual(refs, fread(pjoin(self.superp, ".gift-refs"), mode="b"))
+        self._gitoutput([origit, "show", ":foo/bar/bar"], ["staged only"], cwd=self.superp)
+
+    def test_commit_sub_dir_not_pattern(self):
+        # The dir "a*" is not a pattern that also matches ab/new
+        fwrite(pjoin(self.superp, ".gift"), "dirs:\n  a*: ../bargit@master\n")
+        os.mkdir(pjoin(self.superp, "ab"))
+        fwrite(pjoin(self.superp, "ab", "new"), "new\n")
+        cmdx(origit, "add", "ab/new", cwd=self.superp)
+
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        self._gitoutput([origit, "ls-tree", "-r", "--name-only", "HEAD"],
+                        [".gift", ".gift-refs", "a*/bar", "imsuperman"], cwd=self.superp)
+        self._gitoutput([origit, "diff", "--cached", "--name-only"], ["ab/new"], cwd=self.superp)
+
     def test_commit_sub_skips_sub_tags(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, "tag", "bar-tag", cwd=self.subbarp)

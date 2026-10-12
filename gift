@@ -107,6 +107,47 @@ def read_text(path: str, name: str) -> str | None:
         raise GiftError("{}: {}".format(name, e))
 
 
+def read_bytes(path: str, name: str) -> bytes | None:
+    # As read_text(), for a file that an undo writes back as it was
+    try:
+        with open(path, 'rb') as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise GiftError("{}: {}".format(name, e.strerror))
+
+
+def restore_file(path: str, name: str, content: bytes | None) -> None:
+    # A file that still holds content, such as a read-only file that a
+    # write failed on, is not written again
+    if read_bytes(path, name) == content:
+        return
+
+    if content is None:
+        os.unlink(path)
+        return
+
+    with open(path, 'wb') as f:
+        f.write(content)
+
+
+def report_undo_error(what: str, e: Exception) -> None:
+    # An undo that fails is only reported: the error to raise is the one
+    # that the undo follows
+    msg = str(e)
+    if isinstance(e, CalledProcessError):
+        msg = "\n".join(e.err)
+    display(2, "GIFT: " + what + ": " + msg)
+
+
+def index_entries(root_git: Git, paths: list[str]) -> list[str]:
+    # Quoted, each path is ASCII on one line, as update-index reads it back.
+    # Literal, a dir named "a*" does not match "ab".
+    return root_git.cmdf("-c", "core.quotePath=true", "--literal-pathspecs", "ls-files", "--stage", "--", *paths,
+                         flag=CMD_RAISE_STDOUT)
+
+
 def parse_refs(content: str) -> list[list[str]]:
     # .gift-refs comes with the repo, and its commits go to git as args
     try:
@@ -165,6 +206,16 @@ RawConf = dict[str, Any]
 class Conf(TypedDict):
     # .gift as Gift.parse_conf() expands it
     dirs: dict[str, SubRepoConf]
+
+
+class SavedState(TypedDict):
+    # What an operation may change, as it was before, to undo a failure:
+    # the bytes of each file, None for a missing one, and the index entries
+    # under each path, as `ls-files --stage` lists them. The names and paths
+    # are relative to the work tree root.
+    files: dict[str, bytes | None]
+    paths: list[str]
+    index: list[str]
 
 
 class Gift(object):
@@ -892,7 +943,7 @@ class Gift(object):
             self.check_worktree(subrepo)
             super_tree, commit_hash = self._add_sub_tree(super_tree, subrepo)
             refs.append([subrepo["dir"], commit_hash])
-            paths.append(pjoin(self.working_dir, subrepo["dir"]))
+            paths.append(subrepo["dir"])
 
             # Other clones fetch sub-repo commits only from the remote
             remote_name = subrepo["upstream"]["name"]
@@ -906,20 +957,28 @@ class Gift(object):
         refs = sorted(refs)
         content = yaml.dump(refs, default_flow_style=False)
         refs_path = pjoin(self.working_dir, refs_filename)
-        fwrite(refs_path, content)
 
-        refs_blob = super_git.blob_new(refs_path, flag=CmdFlag.RAISE)
-        super_tree = super_git.tree_add_obj(super_tree, refs_filename, refs_blob)
+        # A failed commit puts back .gift-refs and the index entries that the
+        # reset changed, which may hold changes the user staged
+        saved = self._save_state(super_git, [refs_filename], [refs_filename, *paths])
+        try:
+            fwrite(refs_path, content)
 
-        if super_tree == head_tree:
-            display(2, "GIFT: nothing to commit: no sub-repo changed")
-            return
+            refs_blob = super_git.blob_new(refs_path, flag=CmdFlag.RAISE)
+            super_tree = super_git.tree_add_obj(super_tree, refs_filename, refs_blob)
 
-        new_commit = super_git.cmdf("commit-tree", "-p", parent, super_tree, input=msg, flag=CMD_RAISE_ONELINE)
+            if super_tree == head_tree:
+                display(2, "GIFT: nothing to commit: no sub-repo changed")
+                return
 
-        # Keep other staged changes: reset only the paths this commit changed
-        super_git.cmdf("reset", new_commit, "--", refs_path, *paths, flag=CmdFlag.RAISE)
-        super_git.cmdf("update-ref", "-m", "commit subdirs", "HEAD", new_commit, parent, flag=CmdFlag.RAISE)
+            new_commit = super_git.cmdf("commit-tree", "-p", parent, super_tree, input=msg, flag=CMD_RAISE_ONELINE)
+
+            # Keep other staged changes: reset only the paths this commit changed
+            super_git.cmdf("--literal-pathspecs", "reset", new_commit, "--", refs_filename, *paths, flag=CmdFlag.RAISE)
+            super_git.cmdf("update-ref", "-m", "commit subdirs", "HEAD", new_commit, parent, flag=CmdFlag.RAISE)
+        except BaseException:
+            self._restore_state(super_git, saved, "commit --sub: can not undo the failed commit")
+            raise
 
         self._update_super_head_refs(refs)
 
@@ -1002,6 +1061,31 @@ class Gift(object):
         super_tree = super_git.tree_add_obj(super_tree, subrepo["dir"], sub_tree)
 
         return super_tree, super_git.rev_of(subrepo["refhead"])
+
+    def _save_state(self, root_git: Git, files: list[str], paths: list[str]) -> SavedState:
+        contents = {}
+        for name in files:
+            contents[name] = read_bytes(pjoin(self.working_dir, name), name)
+
+        return {"files": contents, "paths": paths, "index": index_entries(root_git, paths)}
+
+    def _restore_state(self, root_git: Git, saved: SavedState, what: str) -> None:
+        # Each step runs even if an earlier one fails
+        for name, content in saved["files"].items():
+            try:
+                restore_file(pjoin(self.working_dir, name), name, content)
+            except Exception as e:
+                report_undo_error(what, e)
+
+        try:
+            index = index_entries(root_git, saved["paths"])
+            if index != saved["index"]:
+                names = "".join(line.split("\t", 1)[1] + "\n" for line in index)
+                root_git.cmdf("update-index", "--force-remove", "--stdin", input=names, flag=CmdFlag.RAISE)
+                index_info = "".join(line + "\n" for line in saved["index"])
+                root_git.cmdf("update-index", "--index-info", input=index_info, flag=CmdFlag.RAISE)
+        except Exception as e:
+            report_undo_error(what, e)
 
 
 def parse_argv() -> tuple[GitOpt, int, list[str]]:
