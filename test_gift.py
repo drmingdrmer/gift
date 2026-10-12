@@ -1518,6 +1518,51 @@ class TestGift(BaseTest):
         self.assertEqual(ori_hash, reset_hash,
                          "HEAD is reset to original master")
 
+    def test_reset_sub_modes(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        recorded = "466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af"
+        recorded_index = cmdout(giftp, "ls-files", "--stage", cwd=self.subbarp)
+
+        fwrite(pjoin(self.subbarp, "bar"), "committed\n")
+        cmdx(giftp, *ident_args, "commit", "-q", "-m", "change bar", "bar", cwd=self.subbarp)
+        committed = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
+
+        # --merge and --keep refuse to reset bar, which has local changes,
+        # and leave foo/bar as it was
+        cases = (
+            # mode, refused, HEAD, index, bar after the reset
+            ("--soft", False, recorded, "staged", "working\n"),
+            ("--mixed", False, recorded, "recorded", "working\n"),
+            ("--hard", False, recorded, "recorded", "bar\n"),
+            ("--merge", True, committed, "staged", "working\n"),
+            ("--keep", True, committed, "staged", "working\n"),
+        )
+        for mode, refused, want_head, want_index, want_bar in cases:
+            # bar has other content in HEAD, in the index and in the work tree
+            cmdx(giftp, "reset", "-q", "--hard", committed, cwd=self.subbarp)
+            fwrite(pjoin(self.subbarp, "bar"), "staged\n")
+            cmdx(giftp, "add", "bar", cwd=self.subbarp)
+            fwrite(pjoin(self.subbarp, "bar"), "working\n")
+            indexes = {
+                "recorded": recorded_index,
+                "staged": cmdout(giftp, "ls-files", "--stage", cwd=self.subbarp),
+            }
+
+            if refused:
+                with self.assertRaises(CalledProcessError, msg=mode) as failure:
+                    cmdx(giftp, "reset", "--sub", mode, cwd=self.superp)
+                self.assertEqual(128, failure.exception.returncode, mode)
+            else:
+                cmdx(giftp, "reset", "--sub", mode, cwd=self.superp)
+
+            head = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
+            index = cmdout(giftp, "ls-files", "--stage", cwd=self.subbarp)
+            bar = fread(pjoin(self.subbarp, "bar"))
+            self.assertEqual(want_head, head, mode)
+            self.assertEqual(indexes[want_index], index, mode)
+            self.assertEqual(want_bar, bar, mode)
+
     def test_reset_sub_missing_commit(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=self.superp)
