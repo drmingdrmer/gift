@@ -1611,24 +1611,24 @@ class TestGift(BaseTest):
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
         self._check_initial_superhead()
 
-        head_of_bar = cmdx(giftp, "rev-parse",
+        head_of_bar = cmd0(giftp, "rev-parse",
                            "refs/remotes/super/head", cwd=self.subbarp)
 
-        state0 = fread(pjoin(self.superp, ".gift-refs"))
-
         self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
 
-        head1 = cmdx(giftp, "rev-parse",
+        head1 = cmd0(giftp, "rev-parse",
                      "refs/remotes/super/head", cwd=self.subbarp)
-        self.assertNotEqual(head_of_bar, head1)
+        self.assertEqual(newbar, head1)
 
-        state1 = fread(pjoin(self.superp, ".gift-refs"))
-        self.assertNotEqual(state0, state1)
+        content = fread(pjoin(self.superp, ".gift-refs"))
+        refs = gift.parse_refs(content)
+        self.assertEqual([["foo/bar", newbar], ["foo/wow", "6bf37e52cbafcf55ff4710bb2b63309b55bf8e54"]], refs)
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo
         cmdx(giftp, "reset", "HEAD~", cwd=self.superp)
-        head2 = cmdx(giftp, "rev-parse",
+        head2 = cmd0(giftp, "rev-parse",
                      "refs/remotes/super/head", cwd=self.subbarp)
         self.assertEqual(head_of_bar, head2)
 
@@ -1636,19 +1636,20 @@ class TestGift(BaseTest):
 
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
-        head_of_bar = cmdx(giftp, "rev-parse",
+        head_of_bar = cmd0(giftp, "rev-parse",
                            "refs/remotes/super/head", cwd=self.subbarp)
 
         self._add_file_to_subbar()
+        newbar = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
-        head_of_bar1 = cmdx(giftp, "rev-parse",
+        head_of_bar1 = cmd0(giftp, "rev-parse",
                             "refs/remotes/super/head", cwd=self.subbarp)
 
-        self.assertNotEqual(head_of_bar, head_of_bar1)
+        self.assertEqual(newbar, head_of_bar1)
 
         # changing HEAD in super repo should repopulate super/head ref in sub repo
         cmdx(giftp, "checkout", "HEAD~", cwd=self.superp)
-        head_of_bar_after_checkout = cmdx(
+        head_of_bar_after_checkout = cmd0(
             giftp, "rev-parse", "refs/remotes/super/head", cwd=self.subbarp)
 
         self.assertEqual(head_of_bar, head_of_bar_after_checkout)
