@@ -171,6 +171,9 @@ def report_undo_error(what: str, e: Exception) -> None:
 def index_entries(root_git: Git, paths: list[str]) -> list[str]:
     # Quoted, each path is ASCII on one line, as update-index reads it back.
     # Literal, a dir named "a*" does not match "ab".
+    # ls-files without a path would list every entry.
+    if paths == []:
+        return []
     return root_git.cmdf("-c", "core.quotePath=true", "--literal-pathspecs", "ls-files", "--stage", "--", *paths,
                          flag=CMD_RAISE_STDOUT)
 
@@ -1015,9 +1018,21 @@ class Gift(object):
         content = yaml.dump(refs, default_flow_style=False)
         refs_path = pjoin(self.working_dir, refs_filename)
 
-        # A failed commit puts back .gift-refs and the index entries that the
-        # reset changed, which may hold changes the user staged
-        saved = self._save_state(super_git, [refs_filename], [refs_filename, *paths])
+        # A failed commit puts back .gift-refs. The index changes as in git
+        # commit: hold index.lock, reset the paths in a copy of the index, and
+        # let the copy replace the index only after HEAD moves. A failure
+        # leaves the index as it was, with flags such as intent-to-add.
+        saved = self._save_state(super_git, [refs_filename], [])
+        index_name = super_git.cmdf("rev-parse", "--git-path", "index", flag=CMD_RAISE_ONELINE)
+        index_path = pjoin(self.working_dir, index_name)
+        lock_path = index_path + ".lock"
+        new_index = index_path + ".gift"
+        try:
+            lock_fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        except OSError as e:
+            raise GiftError("commit --sub: can not lock the index: {}: {}".format(lock_path, e.strerror))
+        os.close(lock_fd)
+
         try:
             write_text(refs_path, refs_filename, content)
 
@@ -1033,12 +1048,23 @@ class Gift(object):
 
             new_commit = super_git.cmdf("commit-tree", "-p", parent, super_tree, input=msg, flag=CMD_RAISE_ONELINE)
 
+            # git reads a missing index as an empty one
+            if os.path.exists(index_path):
+                shutil.copyfile(index_path, new_index)
+
             # Keep other staged changes: reset only the paths this commit changed
-            super_git.cmdf("--literal-pathspecs", "reset", new_commit, "--", refs_filename, *paths, flag=CmdFlag.RAISE)
+            super_git.cmdf("--literal-pathspecs", "reset", new_commit, "--", refs_filename, *paths,
+                           env={"GIT_INDEX_FILE": new_index}, flag=CmdFlag.RAISE)
             super_git.cmdf("update-ref", "-m", "commit subdirs", "HEAD", new_commit, parent, flag=CmdFlag.RAISE)
         except BaseException:
             self._restore_state(super_git, saved, "commit --sub: can not undo the failed commit")
             raise
+        else:
+            os.replace(new_index, index_path)
+        finally:
+            if os.path.lexists(new_index):
+                os.unlink(new_index)
+            os.unlink(lock_path)
 
         # HEAD has the commit, so the error must not read as a failed commit
         try:

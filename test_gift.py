@@ -1790,23 +1790,74 @@ class TestGift(BaseTest):
         cmdx(origit, "add", "foo/bar/bar", cwd=self.superp)
         fwrite(pjoin(self.subbarp, "bar"), "bar\n")
 
+        # Entries with an index flag, which `ls-files --stage` does not show:
+        # intent-to-add, assume-unchanged and skip-worktree
+        fwrite(pjoin(self.subbarp, "pending"), "pending\n")
+        cmdx(origit, "add", "-N", "foo/bar/pending", cwd=self.superp)
+        cmdx(origit, "update-index", "--assume-unchanged", "foo/bar/bar", cwd=self.superp)
+        cmdx(origit, "update-index", "--skip-worktree", "foo/wow/wow", cwd=self.superp)
+
         # commit --sub has a foo/bar commit to import, but can not lock the
         # branch to update HEAD
         self._add_file_to_subbar()
         fwrite(pjoin(self.supergitp, "refs", "heads", "master.lock"), "")
 
+        # git diff may refresh the index, so the index is read after it
         head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
-        index = cmdout(origit, "ls-files", "--stage", cwd=self.superp)
+        cached = cmdout(origit, "diff", "--cached", "--raw", cwd=self.superp)
+        working = cmdout(origit, "diff", "--raw", cwd=self.superp)
+        index = cmdout(origit, "ls-files", "--debug", cwd=self.superp)
         refs = fread(pjoin(self.superp, ".gift-refs"), mode="b")
 
         with self.assertRaises(CalledProcessError) as failure:
             cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
 
+        index_after = cmdout(origit, "ls-files", "--debug", cwd=self.superp)
+        cached_after = cmdout(origit, "diff", "--cached", "--raw", cwd=self.superp)
+        working_after = cmdout(origit, "diff", "--raw", cwd=self.superp)
         self.assertEqual(128, failure.exception.returncode)
         self.assertEqual(head, cmd0(origit, "rev-parse", "HEAD", cwd=self.superp))
-        self.assertEqual(index, cmdout(origit, "ls-files", "--stage", cwd=self.superp))
+        self.assertEqual(index, index_after)
+        self.assertEqual(cached, cached_after)
+        self.assertEqual(working, working_after)
         self.assertEqual(refs, fread(pjoin(self.superp, ".gift-refs"), mode="b"))
         self._gitoutput([origit, "show", ":foo/bar/bar"], ["staged only"], cwd=self.superp)
+
+    def test_commit_sub_index_file(self):
+        # As git commit, commit --sub updates the index that GIT_INDEX_FILE
+        # names
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        indexp = pjoin(self.supergitp, "index")
+        other_indexp = pjoin(self.base, "other-index")
+        shutil.copyfile(indexp, other_indexp)
+        index = fread(indexp, mode="b")
+
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp, env={"GIT_INDEX_FILE": other_indexp})
+
+        index_after = fread(indexp, mode="b")
+        self.assertEqual(index, index_after)
+        self._gitoutput([origit, "diff", "--cached", "--name-only"], [], cwd=self.superp,
+                        env={"GIT_INDEX_FILE": other_indexp})
+
+    def test_commit_sub_index_locked(self):
+        # As git commit, commit --sub does not run while another git command
+        # holds index.lock
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        lockp = pjoin(self.supergitp, "index.lock")
+        fwrite(lockp, "")
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        e = failure.exception
+
+        head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        lock_exists = os.path.exists(lockp)
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["commit --sub: can not lock the index: " + lockp + ": File exists"], e.err)
+        self.assertEqual(head, head_after)
+        self.assertTrue(lock_exists)
+        self._nofile(self.superp, ".gift-refs")
 
     def test_commit_sub_retry_updates_super_head(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
