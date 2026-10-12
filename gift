@@ -561,7 +561,7 @@ class Gift(object):
             ctxmsg='GIFT: ' + subrepo['dir'],
         )
 
-    def check_worktree(self, subrepo: SubRepoConf) -> None:
+    def prepare_sub_repo(self, subrepo: SubRepoConf) -> None:
         self.try_init_sub_git(subrepo)
         self.try_init_sub_worktree(subrepo)
         self.try_switch_branch(self._sub_git(subrepo), subrepo)
@@ -797,7 +797,7 @@ class Gift(object):
             if subrepo is not None:
                 # Not before the --sub commands, which set up each sub-repo
                 # themselves: fetch --sub fetches before it checks out
-                self.check_worktree(subrepo)
+                self.prepare_sub_repo(subrepo)
                 sub_git = self._sub_git(subrepo)
                 sub_git.cmdf(*cmds, flag=CMD_RAISE_PASS)
             else:
@@ -947,7 +947,7 @@ class Gift(object):
                 write_text(refs_path, refs_filename, yaml.dump(kept_refs, default_flow_style=False))
                 changed_paths.append(refs_path)
             self.init_git_config()
-            self.check_worktree(self.conf["dirs"][subdir])
+            self.prepare_sub_repo(self.conf["dirs"][subdir])
 
             super_git = self._super_git()
             super_git.cmdf("add", *changed_paths, flag=CmdFlag.RAISE)
@@ -1004,7 +1004,7 @@ class Gift(object):
     def x_init_sub(self, cmds: list[str]) -> None:
         self.check_no_args(cmds)
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            self.prepare_sub_repo(subrepo)
 
         refs = self.read_refs()
         self._update_super_head_refs(refs)
@@ -1024,7 +1024,7 @@ class Gift(object):
         refs = []
         paths = []
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            self.prepare_sub_repo(subrepo)
             super_tree, commit_hash = self._add_sub_tree(super_git, super_tree, subrepo)
             refs.append([subrepo["dir"], commit_hash])
             paths.append(subrepo["dir"])
@@ -1117,7 +1117,7 @@ class Gift(object):
         self.check_no_args(cmds)
         # only ff-only allowed
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            self.prepare_sub_repo(subrepo)
             sub_git = self._sub_git(subrepo)
             _, out, err = sub_git.cmdf("merge", "--ff-only", flag=CmdFlag.RAISE)
             display(out, err)
@@ -1167,7 +1167,7 @@ class Gift(object):
         self._update_super_head_refs(refs)
 
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            self.prepare_sub_repo(subrepo)
             sub_git = self._sub_git(subrepo)
             _, out, err = sub_git.cmdf("reset", *args, super_head_ref, flag=CmdFlag.RAISE)
             display(out, err)
