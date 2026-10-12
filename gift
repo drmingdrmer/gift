@@ -1151,7 +1151,9 @@ class Gift(object):
 
         refs = []
         for subrepo in self.conf["dirs"].values():
-            self.check_worktree(subrepo)
+            # Only the sub git dir is set up here. A work tree, which a branch
+            # switch may change, waits until every target is checked.
+            self.try_init_sub_git(subrepo)
             commit_hash = recorded.get(subrepo["dir"])
             if commit_hash is None:
                 raise GiftError("reset --sub: {}: {} of HEAD records no commit".format(subrepo["dir"], refs_filename))
@@ -1165,6 +1167,7 @@ class Gift(object):
         self._update_super_head_refs(refs)
 
         for subrepo in self.conf["dirs"].values():
+            self.check_worktree(subrepo)
             sub_git = self._sub_git(subrepo)
             _, out, err = sub_git.cmdf("reset", *args, super_head_ref, flag=CmdFlag.RAISE)
             display(out, err)
