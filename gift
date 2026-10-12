@@ -599,7 +599,9 @@ class Gift(object):
                 sub_git.out(2, "warning:", change_msg + ", but the work tree has local changes")
                 return
 
-            code, _, err = sub_git.cmdf("checkout", branch)
+            # The user did not run this checkout, so it must not replace an
+            # ignored file, such as a local cache, with a tracked one
+            code, _, err = sub_git.cmdf("checkout", "--no-overwrite-ignore", branch)
             if code != 0:
                 sub_git.out(2, "warning:", change_msg + ", but checkout failed:")
                 display(2, err)

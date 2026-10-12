@@ -2067,6 +2067,43 @@ class TestGift(BaseTest):
         self._gitoutput([giftp, "symbolic-ref", "--short", "HEAD"], ["master"], cwd=self.subbarp)
         self._gitoutput([origit, "--git-dir=" + bargitdir, "config", "gift.branch"], ["dev"])
 
+    def test_changed_branch_ignored_file(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        bargitdir = pjoin(self.supergitp, "gift", "subdir", "foo", "bar")
+
+        # bargit gets a branch dev with a file cache, and foo/bar fetches it
+        cmdx(origit, "clone", self.bargitp, self.barp)
+        cmdx(origit, "checkout", "-b", "dev", cwd=self.barp)
+        fwrite(pjoin(self.barp, "cache"), "remote cache\n")
+        cmdx(origit, "add", "cache", cwd=self.barp)
+        cmdx(origit, *ident_args, "commit", "-m", "add cache", cwd=self.barp)
+        cmdx(origit, "push", "origin", "dev", cwd=self.barp)
+        cmdx(giftp, "fetch", cwd=self.subbarp)
+
+        # The user has another cache in foo/bar, which git ignores
+        excludep = pjoin(self.base, "exclude")
+        fwrite(excludep, "cache\n")
+        excludes = ["-c", "core.excludesFile=" + excludep]
+        fwrite(pjoin(self.subbarp, "cache"), "local cache data\n")
+        index = cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage")
+
+        fwrite(pjoin(self.superp, ".gift"), "dirs:\n  foo/bar: ../bargit@dev\n  foo/wow: ../wowgit@master\n")
+        _, _, err = cmdx(giftp, *excludes, "status", "--porcelain", cwd=self.subbarp)
+
+        self.assertEqual("GIFT: foo/bar: warning: .gift changed the branch from master to dev, but checkout failed:", err[0])
+        self.assertIn("\tcache", err)
+        self._fcontent("local cache data\n", self.subbarp, "cache")
+        self._gitoutput([origit, "--git-dir=" + bargitdir, "symbolic-ref", "--short", "HEAD"], ["master"])
+        self.assertEqual(index, cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage"))
+        self._gitoutput([origit, "--git-dir=" + bargitdir, "config", "gift.branch"], ["master"])
+
+        # Without the local cache, foo/bar moves to dev
+        os.unlink(pjoin(self.subbarp, "cache"))
+        _, _, err = cmdx(giftp, *excludes, "status", "--porcelain", cwd=self.subbarp)
+
+        self.assertEqual(["GIFT: foo/bar: .gift changed the branch from master to dev: checkout dev"], err)
+        self._fcontent("remote cache\n", self.subbarp, "cache")
+
     def test_no_gift_file_skips_refs(self):
         # emptyp has no .gift, so gift runs no extra git process for .gift-refs
         cmdx(giftp, "init", cwd=self.emptyp)
