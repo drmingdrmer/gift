@@ -24,7 +24,6 @@ from typing import TypedDict
 import yaml
 
 import k3log
-from k3fs import fwrite
 from k3git import GitOpt
 from k3git import Git
 from k3handy import CMD_NONE_ONELINE
@@ -110,10 +109,7 @@ def read_text(path: str, name: str) -> str | None:
 def write_text(path: str, name: str, content: str) -> None:
     # As read_text(), a file that can not be written is an error that names
     # it, not a traceback
-    try:
-        fwrite(path, content)
-    except OSError as e:
-        raise GiftError("{}: {}".format(name, e.strerror))
+    write_bytes(path, name, content.encode())
 
 
 def read_bytes(path: str, name: str) -> bytes | None:
@@ -123,6 +119,22 @@ def read_bytes(path: str, name: str) -> bytes | None:
             return f.read()
     except FileNotFoundError:
         return None
+    except OSError as e:
+        raise GiftError("{}: {}".format(name, e.strerror))
+
+
+def write_bytes(path: str, name: str, content: bytes) -> None:
+    # .gift and .gift-refs come with the repo, so either may be a symlink
+    # that leads out of it. The write refuses a symlink, and O_NOFOLLOW also
+    # refuses one put in place of the file after the check.
+    if os.path.islink(path):
+        raise GiftError("{}: expect a regular file, not a symlink".format(name))
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags, 0o666)
+        with os.fdopen(fd, 'wb') as f:
+            f.write(content)
     except OSError as e:
         raise GiftError("{}: {}".format(name, e.strerror))
 
@@ -137,8 +149,7 @@ def restore_file(path: str, name: str, content: bytes | None) -> None:
         os.unlink(path)
         return
 
-    with open(path, 'wb') as f:
-        f.write(content)
+    write_bytes(path, name, content)
 
 
 def report_undo_error(what: str, e: Exception) -> None:

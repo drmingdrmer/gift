@@ -829,10 +829,9 @@ class TestGift(BaseTest):
         e = failure.exception
 
         # gift still reports the error of the commit
-        confp = pjoin(self.emptyp, ".gift")
         self.assertEqual(1, e.returncode)
         self.assertEqual([
-            "GIFT: clone --sub: can not undo the failed clone: [Errno 13] Permission denied: '" + confp + "'",
+            "GIFT: clone --sub: can not undo the failed clone: .gift: Permission denied",
             "hook failed",
         ], e.err[-2:])
 
@@ -915,6 +914,51 @@ class TestGift(BaseTest):
 
         self.assertEqual(2, e.returncode)
         self.assertEqual([".gift-refs: Permission denied"], e.err)
+
+    def test_metadata_symlink(self):
+        # .gift-refs in HEAD is a symlink to a file out of the repo
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        externalp = pjoin(self.base, "external")
+        fwrite(externalp, "personal data\n")
+        refsp = pjoin(self.superp, ".gift-refs")
+        os.unlink(refsp)
+        os.symlink(externalp, refsp)
+        cmdx(origit, *ident_args, "commit", "-m", "link .gift-refs", ".gift-refs", cwd=self.superp)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.superp)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        e = failure.exception
+
+        head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        index_after = cmdout(origit, "ls-files", "--stage", cwd=self.superp)
+        link = os.readlink(refsp)
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift-refs: expect a regular file, not a symlink"], e.err)
+        self.assertEqual(head, head_after)
+        self.assertEqual(index, index_after)
+        self.assertEqual(externalp, link)
+        self._fcontent("personal data\n", externalp)
+
+        # clone --sub does not write .gift through a symlink either
+        cmdx(giftp, "init", cwd=self.emptyp)
+        confp = pjoin(self.emptyp, ".gift")
+        fwrite(externalp, "dirs: {}\n")
+        os.symlink(externalp, confp)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+        e = failure.exception
+
+        link = os.readlink(confp)
+        sub_gitdirs_exist = os.path.exists(pjoin(self.emptyp, ".git", "gift"))
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift: expect a regular file, not a symlink"], e.err)
+        self.assertEqual(externalp, link)
+        self._fcontent("dirs: {}\n", externalp)
+        self.assertFalse(sub_gitdirs_exist)
 
     def test_clone_sub_dropped_dir(self):
         cmdx(giftp, "init", cwd=self.emptyp)
