@@ -1698,6 +1698,45 @@ class TestGift(BaseTest):
                         ["imsuperman"], cwd=self.superp)
         self._gitoutput([giftp, "show", ":imsuperman"], ["staged"], cwd=self.superp)
 
+    def test_commit_sub_imports_head(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+
+        # foo/bar has a new commit, a different staged change and another
+        # change in the work tree. super has a staged change of its own.
+        fwrite(pjoin(self.subbarp, "bar"), "committed\n")
+        cmdx(giftp, *ident_args, "commit", "-m", "change bar", "bar", cwd=self.subbarp)
+        fwrite(pjoin(self.subbarp, "bar"), "staged\n")
+        cmdx(giftp, "add", "bar", cwd=self.subbarp)
+        fwrite(pjoin(self.subbarp, "bar"), "working\n")
+        fwrite(pjoin(self.superp, "imsuperman"), "staged\n")
+        cmdx(giftp, "add", "imsuperman", cwd=self.superp)
+
+        bar_head = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
+        bar_tree = cmd0(giftp, "rev-parse", "HEAD^{tree}", cwd=self.subbarp)
+        bar_index = cmdout(giftp, "ls-files", "--stage", cwd=self.subbarp)
+        super_staged = cmdout(origit, "ls-files", "--stage", "imsuperman", cwd=self.superp)
+
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        imported_tree = cmd0(origit, "rev-parse", "HEAD:foo/bar", cwd=self.superp)
+        bar_head_after = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subbarp)
+        bar_index_after = cmdout(giftp, "ls-files", "--stage", cwd=self.subbarp)
+        super_staged_after = cmdout(origit, "ls-files", "--stage", "imsuperman", cwd=self.superp)
+        super_changes = cmdout(origit, "diff", "--cached", "--name-only", cwd=self.superp)
+        self.assertEqual(bar_tree, imported_tree)
+        self.assertEqual(bar_head, bar_head_after)
+        self.assertEqual(bar_index, bar_index_after)
+        self.assertEqual(super_staged, super_staged_after)
+        self.assertEqual(["imsuperman"], super_changes)
+        self._fcontent("working\n", self.subbarp, "bar")
+
+        # Without a new foo/bar commit, a second commit --sub commits nothing
+        super_head = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        super_head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        self.assertEqual(super_head, super_head_after)
+
     def test_commit_sub_failed_head_update(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
