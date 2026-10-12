@@ -531,12 +531,17 @@ class Gift(object):
         upstream = subrepo["upstream"]
 
         if not os.path.isdir(sub_gitdir_path):
+            # commit --sub fetches the sub-repo commits into the super repo,
+            # so the sub git dir takes the object format of the super repo
+            super_git = self._super_git(root=True)
+            object_format = super_git.cmdf("rev-parse", "--show-object-format", flag=CMD_RAISE_ONELINE)
+
             # git init --bare fails with a GIT_WORK_TREE set for the super repo
             env = dict(os.environ)
             env.pop("GIT_DIR", None)
             env.pop("GIT_WORK_TREE", None)
-            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"], sub_gitdir_path,
-                 env=env, inherit_env=False)
+            cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"],
+                 "--object-format=" + object_format, sub_gitdir_path, env=env, inherit_env=False)
         else:
             dd("gitdir exist:", sub_gitdir_path)
 

@@ -1070,6 +1070,62 @@ class TestGift(BaseTest):
             self.assertEqual([fn], files, subdir)
             self._fcontent(fn + "\n", workp, fn)
 
+    def test_init_sub_object_format(self):
+        # The host default is the other format: the sub git dir takes the
+        # format of super, which the url of the sub-repo has too
+        for fmt, other in (("sha1", "sha256"), ("sha256", "sha1")):
+            basep = pjoin(self.base, "testdata", fmt)
+            upp = pjoin(basep, "up")
+            superp = pjoin(basep, "super")
+            env = {"GIT_DEFAULT_HASH": other}
+
+            cmdx(origit, "init", "-q", "-b", "master", "--object-format=" + fmt, upp)
+            fwrite(pjoin(upp, "bar"), "bar\n")
+            cmdx(origit, "add", "bar", cwd=upp)
+            cmdx(origit, *ident_args, "commit", "-m", "add bar", cwd=upp)
+            up_head = cmd0(origit, "rev-parse", "HEAD", cwd=upp)
+            up_tree = cmd0(origit, "rev-parse", "HEAD^{tree}", cwd=upp)
+
+            cmdx(origit, "init", "-q", "-b", "master", "--object-format=" + fmt, superp)
+            fwrite(pjoin(superp, ".gift"), "dirs:\n  dep: ../up@master\n")
+            cmdx(origit, "add", ".gift", cwd=superp)
+            cmdx(origit, *ident_args, "commit", "-m", "add .gift", cwd=superp)
+
+            cmdx(giftp, "init", "--sub", cwd=superp, env=env)
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=superp, env=env)
+
+            depgitp = pjoin(superp, ".git", "gift", "subdir", "dep")
+            dep_format = cmd0(origit, "--git-dir=" + depgitp, "rev-parse", "--show-object-format")
+            dep_tree = cmd0(origit, "rev-parse", "HEAD:dep", cwd=superp)
+            self.assertEqual(fmt, dep_format)
+            self.assertEqual(up_tree, dep_tree, fmt)
+            self._fcontent("- - dep\n  - " + up_head + "\n", superp, ".gift-refs")
+
+            # A fresh clone checks out the recorded commit, and reset --sub
+            # puts back a changed file
+            clonep = pjoin(basep, "clone")
+            cmdx(origit, "clone", "-q", superp, clonep)
+            cmdx(giftp, "init", "--sub", cwd=clonep, env=env)
+
+            clone_depgitp = pjoin(clonep, ".git", "gift", "subdir", "dep")
+            clone_dep_head = cmd0(origit, "--git-dir=" + clone_depgitp, "rev-parse", "HEAD")
+            self.assertEqual(up_head, clone_dep_head, fmt)
+            self._fcontent("bar\n", clonep, "dep", "bar")
+
+            fwrite(pjoin(clonep, "dep", "bar"), "changed\n")
+            cmdx(giftp, "reset", "--sub", "--hard", cwd=clonep, env=env)
+            self._fcontent("bar\n", clonep, "dep", "bar")
+
+        # A sha1 url for the sha256 super fails at the fetch, before any import
+        fwrite(pjoin(superp, ".gift"), "dirs:\n  dep: ../up@master\n  other: ../../sha1/up@master\n")
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "init", "--sub", cwd=superp)
+        e = failure.exception
+
+        self.assertEqual(128, e.returncode)
+        self.assertIn("fatal: mismatched algorithms: client sha256; server sha1", e.err)
+        self._nofile(superp, "other", "bar")
+
     def test_commit_in_super(self):
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         cmdx(giftp, "add", "foo", cwd=self.superp)
