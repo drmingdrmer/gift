@@ -2164,6 +2164,33 @@ class TestGift(BaseTest):
             content = f.read()
         self.assertEqual(b"\xff\n", content)
 
+    def test_undecodable_head_refs(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+        good = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+
+        with open(pjoin(self.superp, ".gift-refs"), "wb") as f:
+            f.write(b"\xff\n")
+        cmdx(origit, *ident_args, "commit", "-m", "break .gift-refs", ".gift-refs", cwd=self.superp)
+        bad = cmd0(origit, "rev-parse", "HEAD", cwd=self.superp)
+        refserr = ".gift-refs: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+
+        # A checkout out of the bad commit runs, and super/head follows the
+        # .gift-refs of the good one
+        self._remove_super_ref()
+        _, _, err = cmdx(giftp, "checkout", "-q", good, cwd=self.superp)
+
+        self.assertEqual([], err)
+        self.assertEqual(good, cmd0(origit, "rev-parse", "HEAD", cwd=self.superp))
+        self._check_initial_superhead()
+
+        # A checkout into the bad commit runs, and gift only warns
+        _, _, err = cmdx(giftp, "checkout", "-q", bad, cwd=self.superp)
+
+        self.assertEqual(["GIFT: can not parse .gift-refs in HEAD:", refserr], err)
+        self.assertEqual(bad, cmd0(origit, "rev-parse", "HEAD", cwd=self.superp))
+
 
 def force_remove(fn):
 

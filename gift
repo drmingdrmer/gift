@@ -41,6 +41,7 @@ from k3handy import pabs
 from k3handy import pjoin
 from k3handy import prebase
 from k3proc import CalledProcessError
+from k3proc import command
 
 version = '0.2.0'
 conf_filename = ".gift"
@@ -399,6 +400,21 @@ class Gift(object):
         content = read_text(pjoin(self.working_dir, refs_filename), refs_filename)
         if content is None:
             return []
+        return parse_refs(content)
+
+    def read_head_refs(self) -> list[list[str]] | None:
+        # The commits that .gift-refs in HEAD records, None without such a
+        # file. Read as bytes, a blob that is not UTF-8 is a broken
+        # .gift-refs, as a blob that yaml can not parse.
+        code, out, _ = command(self.gitpath, *self.gitopt.to_args(), "show", "HEAD:" + refs_filename,
+                               text=False, cwd=self.cwd)
+        if code != 0:
+            return None
+
+        try:
+            content = out.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise GiftError("{}: {}".format(refs_filename, e))
         return parse_refs(content)
 
     def parse_conf(self) -> Conf:
@@ -783,15 +799,8 @@ class Gift(object):
         if self.in_git_dir or not os.path.isfile(self.confpath):
             return None
 
-        super_git = self._super_git()
         try:
-            lines = super_git.cmdf("show", "HEAD:" + refs_filename, flag=CMD_RAISE_STDOUT)
-        except CalledProcessError:
-            return None
-
-        content = "\n".join(lines)
-        try:
-            return parse_refs(content)
+            return self.read_head_refs()
         except GiftError as e:
             if warn:
                 display(2, ["GIFT: can not parse " + refs_filename + " in HEAD:", str(e)])
