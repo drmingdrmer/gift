@@ -1166,6 +1166,21 @@ class TestGift(BaseTest):
         self._fcontent("bar\n", self.subbarp, "bar")
         self._fcontent("wow\n", self.subwowp, "wow")
 
+    def test_init_sub_index_file(self):
+        # GIT_INDEX_FILE names an index of the super repo, which the sub-repo
+        # commands do not use
+        indexp = pjoin(self.supergitp, "index")
+        other_indexp = pjoin(self.base, "other-index")
+        shutil.copyfile(indexp, other_indexp)
+        other_index = fread(other_indexp, mode="b")
+
+        cmdx(giftp, "init", "--sub", cwd=self.superp, env={"GIT_INDEX_FILE": other_indexp})
+
+        other_index_after = fread(other_indexp, mode="b")
+        self.assertEqual(other_index, other_index_after)
+        self._gitoutput([giftp, "status", "--short"], [], cwd=self.subbarp)
+        self._gitoutput([giftp, "status", "--short"], [], cwd=self.subwowp)
+
     def test_init_sub_gift_example(self):
         # Each url of _gift_example is rewritten to bargit, so the test runs
         # offline. The relative url ../gift is a bare clone of bargit.

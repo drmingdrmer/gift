@@ -18,6 +18,7 @@ import shutil
 import sys
 import logging
 import urllib.parse
+from functools import cached_property
 from typing import Any
 from typing import TypedDict
 
@@ -247,6 +248,17 @@ class SavedState(TypedDict):
     files: dict[str, bytes | None]
     paths: list[str]
     index: list[str]
+
+
+class SubGit(Git):
+    # Runs each git command of a sub-repo with env as its whole environment.
+    # The k3git helpers, such as rev_of(), run git through cmdf() too.
+    def __init__(self, *args: Any, env: dict[str, str], **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.env = env
+
+    def cmdf(self, *args: str, **kwargs: Any) -> Any:
+        return super().cmdf(*args, env=self.env, inherit_env=False, **kwargs)
 
 
 class Gift(object):
@@ -542,6 +554,20 @@ class Gift(object):
             cwd=self.cwd,
         )
 
+    @cached_property
+    def sub_env(self) -> dict[str, str]:
+        # A sub-repo is another repo. As git does for a submodule, the
+        # sub-repo commands run without the repo variables of the caller,
+        # such as GIT_INDEX_FILE that git sets for the hooks of git commit,
+        # but keep the config set by git -c or GIT_CONFIG_COUNT.
+        config_vars = ("GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT")
+        repo_vars = cmdf(self.gitpath, "rev-parse", "--local-env-vars", cwd=self.cwd, flag=CMD_RAISE_STDOUT)
+        env = dict(os.environ)
+        for name in repo_vars:
+            if name not in config_vars:
+                env.pop(name, None)
+        return env
+
     def _sub_git(self, subrepo: SubRepoConf, bare: bool = False) -> Git:
         git_dir = subrepo["git_dir"]
         working_dir: str | None = subrepo["work_tree"]
@@ -549,13 +575,14 @@ class Gift(object):
         if bare:
             working_dir = None
 
-        return Git(
+        return SubGit(
             self.gitopt,
             gitpath=self.gitpath,
             gitdir=git_dir,
             working_dir=working_dir,
             cwd=self.cwd,
             ctxmsg='GIFT: ' + subrepo['dir'],
+            env=self.sub_env,
         )
 
     def prepare_sub_repo(self, subrepo: SubRepoConf) -> None:
@@ -576,11 +603,8 @@ class Gift(object):
             object_format = super_git.cmdf("rev-parse", "--show-object-format", flag=CMD_RAISE_ONELINE)
 
             # git init --bare fails with a GIT_WORK_TREE set for the super repo
-            env = dict(os.environ)
-            env.pop("GIT_DIR", None)
-            env.pop("GIT_WORK_TREE", None)
             cmdx(self.gitpath, "init", "--bare", "--initial-branch=" + upstream["branch"],
-                 "--object-format=" + object_format, sub_gitdir_path, env=env, inherit_env=False)
+                 "--object-format=" + object_format, sub_gitdir_path, env=self.sub_env, inherit_env=False)
         else:
             dd("gitdir exist:", sub_gitdir_path)
 
