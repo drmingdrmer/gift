@@ -24,7 +24,6 @@ from typing import TypedDict
 import yaml
 
 import k3log
-from k3fs import fread
 from k3fs import fwrite
 from k3git import GitOpt
 from k3git import Git
@@ -106,6 +105,15 @@ def read_text(path: str, name: str) -> str | None:
         raise GiftError("{}: {}".format(name, e.strerror))
     except UnicodeDecodeError as e:
         raise GiftError("{}: {}".format(name, e))
+
+
+def write_text(path: str, name: str, content: str) -> None:
+    # As read_text(), a file that can not be written is an error that names
+    # it, not a traceback
+    try:
+        fwrite(path, content)
+    except OSError as e:
+        raise GiftError("{}: {}".format(name, e.strerror))
 
 
 def read_bytes(path: str, name: str) -> bytes | None:
@@ -854,12 +862,6 @@ class Gift(object):
         raw_conf["dirs"][subdir] = remote
         content = yaml.dump(raw_conf, default_flow_style=False)
 
-        # Commit .gift only after the clone works: a bad entry in HEAD would
-        # break every later --sub command, in every clone
-        old_content = None
-        if os.path.isfile(self.confpath):
-            old_content = fread(self.confpath)
-
         # .gift-refs may still record a commit of an old sub-repo in <dir>, as
         # after <dir> is dropped from .gift. The new url may not have it, so
         # the clone drops the entry, and the sub-repo checks out <branch>.
@@ -870,10 +872,13 @@ class Gift(object):
             refs = parse_refs(old_refs_content)
         kept_refs = [pair for pair in refs if pair[0] != subdir]
 
-        # A failed clone also puts back the index entries of .gift and
-        # .gift-refs, which the commit below adds
+        # Commit .gift only after the clone works: a bad entry in HEAD would
+        # break every later --sub command, in every clone. A failed clone puts
+        # back .gift, .gift-refs and their index entries, which the commit
+        # below adds.
         root_git = self._super_git(root=True)
-        old_index = root_git.cmdf("ls-files", "--stage", "--", conf_filename, refs_filename, flag=CMD_RAISE_STDOUT)
+        meta_files = [conf_filename, refs_filename]
+        saved = self._save_state(root_git, meta_files, meta_files)
         work_tree = pjoin(self.working_dir, subdir)
         work_tree_existed = os.path.exists(work_tree)
         # A failed clone also removes the parent dirs that it made. An empty
@@ -886,12 +891,12 @@ class Gift(object):
         if os.path.lexists(work_tree) and not os.path.isdir(work_tree):
             raise GiftError("clone --sub: {} exists and is not a dir".format(subdir))
 
-        fwrite(self.confpath, content)
-        changed_paths = [self.confpath]
-        if kept_refs != refs:
-            fwrite(refs_path, yaml.dump(kept_refs, default_flow_style=False))
-            changed_paths.append(refs_path)
         try:
+            write_text(self.confpath, conf_filename, content)
+            changed_paths = [self.confpath]
+            if kept_refs != refs:
+                write_text(refs_path, refs_filename, yaml.dump(kept_refs, default_flow_style=False))
+                changed_paths.append(refs_path)
             self.init_git_config()
             self.check_worktree(self.conf["dirs"][subdir])
 
@@ -900,18 +905,9 @@ class Gift(object):
             super_git.cmdf("commit", *changed_paths, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
         except BaseException:
             # An error in the undo must not hide the error of the clone
+            what = "clone --sub: can not undo the failed clone"
+            self._restore_state(root_git, saved, what)
             try:
-                if old_content is None:
-                    os.unlink(self.confpath)
-                else:
-                    fwrite(self.confpath, old_content)
-                if kept_refs != refs:
-                    fwrite(refs_path, old_refs_content)
-
-                root_git.cmdf("update-index", "--force-remove", "--", conf_filename, refs_filename, flag=CmdFlag.RAISE)
-                index_info = "".join(line + "\n" for line in old_index)
-                root_git.cmdf("update-index", "--index-info", input=index_info, flag=CmdFlag.RAISE)
-
                 # This clone made the sub git dir, since none was there before.
                 # Remove it, and the files its checkout made, which a retry could
                 # not check out over.
@@ -923,7 +919,7 @@ class Gift(object):
                         shutil.rmtree(new_work_tree)
                     shutil.rmtree(new_sub_gitdir)
             except Exception as e:
-                display(2, "GIFT: clone --sub: can not undo the failed clone: " + str(e))
+                report_undo_error(what, e)
             raise
 
         self.x_init_sub([])
@@ -979,7 +975,7 @@ class Gift(object):
         # reset changed, which may hold changes the user staged
         saved = self._save_state(super_git, [refs_filename], [refs_filename, *paths])
         try:
-            fwrite(refs_path, content)
+            write_text(refs_path, refs_filename, content)
 
             refs_blob = super_git.blob_new(refs_path, flag=CmdFlag.RAISE)
             super_tree = super_git.tree_add_obj(super_tree, refs_filename, refs_blob)

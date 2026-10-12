@@ -864,6 +864,58 @@ class TestGift(BaseTest):
         self._fcontent("dirs:\n  bar: ../bargit@master\n  wow: ../wowgit@master\n", self.emptyp, ".gift")
         self._fcontent("wow\n", self.emptyp, "wow", "wow")
 
+    def test_clone_sub_failed_refs_write(self):
+        if os.geteuid() == 0:
+            self.skipTest("root writes a file without write permission")
+
+        # .gift-refs records a commit of an old sub-repo in dep, which the
+        # clone drops, but can not write
+        cmdx(giftp, "init", cwd=self.emptyp)
+        confp = pjoin(self.emptyp, ".gift")
+        refsp = pjoin(self.emptyp, ".gift-refs")
+        fwrite(confp, "dirs: {}\n")
+        fwrite(refsp, "- - dep\n  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54\n")
+        cmdx(origit, "add", ".gift", ".gift-refs", cwd=self.emptyp)
+        cmdx(origit, *ident_args, "commit", "-m", "add .gift", cwd=self.emptyp)
+        os.chmod(refsp, 0o444)
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift-refs: Permission denied"], e.err)
+        self._fcontent("dirs: {}\n", confp)
+        self._fcontent("- - dep\n  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54\n", refsp)
+
+        head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index_after = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+        names = sorted(os.listdir(self.emptyp))
+        sub_gitdirs_exist = os.path.exists(pjoin(self.emptyp, ".git", "gift"))
+        self.assertEqual(head, head_after)
+        self.assertEqual(index, index_after)
+        self.assertEqual([".gift", ".gift-refs", ".git", ".gitignore"], names)
+        self.assertFalse(sub_gitdirs_exist)
+
+        # With write permission, the same clone works
+        os.chmod(refsp, 0o644)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "dep", cwd=self.emptyp)
+
+        self._fcontent("dirs:\n  dep: ../bargit@master\n", confp)
+        self._fcontent("- - dep\n  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af\n", refsp)
+        self._fcontent("bar\n", self.emptyp, "dep", "bar")
+
+        # commit --sub names the file that it can not write, too
+        os.chmod(refsp, 0o444)
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.emptyp)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift-refs: Permission denied"], e.err)
+
     def test_clone_sub_dropped_dir(self):
         cmdx(giftp, "init", cwd=self.emptyp)
         cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
