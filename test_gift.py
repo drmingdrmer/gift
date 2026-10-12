@@ -154,11 +154,10 @@ class TestGiftAPI(BaseTest):
         self.assertEqual('foo/bar', rel)
         self.assertEqual({
             'dir': 'foo/bar',
-            'env': {'GIT_DIR': self.base + '/testdata/supergit/gift/subdir/foo/bar',
-                    'GIT_WORK_TREE': self.base + '/testdata/super/foo/bar'},
+            'git_dir': self.base + '/testdata/supergit/gift/subdir/foo/bar',
             'refhead': 'refs/gift/sub/foo%2Fbar',
-            'sub_gitdir': 'gift/subdir/foo/bar',
-            'upstream': {'branch': 'master', 'name': 'origin', 'url': self.base + '/testdata/bargit'}
+            'upstream': {'branch': 'master', 'name': 'origin', 'url': self.base + '/testdata/bargit'},
+            'work_tree': self.base + '/testdata/super/foo/bar',
         }, sb)
 
 
@@ -267,18 +266,18 @@ class TestGiftPartialInit(BaseTest):
         self.sb = sb
         self.rel = rel
         # For a git command on the sub git dir, without its work tree
-        self.bareenv = {"GIT_DIR": sb['env']['GIT_DIR']}
+        self.bareenv = {"GIT_DIR": sb['git_dir']}
 
     def test_init_1_with_inited(self):
 
-        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "init", "--bare", self.sb['git_dir'])
 
         cmdx(giftp, "init", "--sub", cwd=self.superp)
         self._fcontent("bar\n", self.subbarp, "bar")
 
     def test_init_2_with_remote(self):
 
-        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "init", "--bare", self.sb['git_dir'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
              self.sb['upstream']['url'], env=self.bareenv)
 
@@ -287,7 +286,7 @@ class TestGiftPartialInit(BaseTest):
 
     def test_init_3_with_fetched(self):
 
-        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "init", "--bare", self.sb['git_dir'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
              self.sb['upstream']['url'], env=self.bareenv)
         cmdx(origit, "fetch", self.sb['upstream']
@@ -298,15 +297,16 @@ class TestGiftPartialInit(BaseTest):
 
     def test_init_4_already_checkout(self):
 
-        cmdx(origit, "init", "--bare", self.sb['env']['GIT_DIR'])
+        cmdx(origit, "init", "--bare", self.sb['git_dir'])
         cmdx(origit, "remote", "add", self.sb['upstream']['name'],
              self.sb['upstream']['url'], env=self.bareenv)
         cmdx(origit, "fetch", self.sb['upstream']
              ['name'], env=self.bareenv, cwd=self.superp)
 
-        os.makedirs(self.sb['env']['GIT_WORK_TREE'], mode=0o755)
+        os.makedirs(self.sb['work_tree'], mode=0o755)
+        env = {"GIT_DIR": self.sb['git_dir'], "GIT_WORK_TREE": self.sb['work_tree']}
         cmdx(origit, "checkout",
-             self.sb['upstream']['branch'], env=self.sb['env'])
+             self.sb['upstream']['branch'], env=env)
         self._fcontent("bar\n", self.subbarp, "bar")
 
         os.unlink(pjoin(self.subbarp, "bar"))

@@ -220,12 +220,13 @@ class Upstream(TypedDict):
 
 
 class SubRepoConf(TypedDict):
-    # One sub-repo entry of .gift, as Gift.parse_conf() expands it
+    # One sub-repo entry of .gift, as Gift.parse_conf() expands it, with
+    # absolute git_dir and work_tree
     dir: str
     upstream: Upstream
     refhead: str
-    sub_gitdir: str
-    env: dict[str, str]
+    git_dir: str
+    work_tree: str
 
 
 # .gift as yaml loads it: {"dirs": {<dir>: "<url>@<branch>", ...}}, with the
@@ -504,12 +505,8 @@ class Gift(object):
                     "branch": branch,
                 },
                 "refhead": "refs/gift/sub/{dir}".format(dir=ref_name),
-                "sub_gitdir": sub_gitdir,
-                "env": {
-                    "GIT_DIR": pjoin(self.git_dir, sub_gitdir),
-                    "GIT_WORK_TREE": pjoin(self.working_dir, subdir),
-                    # "GIT_OBJECT_DIRECTORY": pjoin(self.git_dir, "objects"),
-                },
+                "git_dir": pjoin(self.git_dir, sub_gitdir),
+                "work_tree": pjoin(self.working_dir, subdir),
             }
             conf["dirs"][subdir] = subrepo
 
@@ -546,8 +543,8 @@ class Gift(object):
         )
 
     def _sub_git(self, subrepo: SubRepoConf, bare: bool = False) -> Git:
-        git_dir = subrepo["env"]["GIT_DIR"]
-        working_dir: str | None = subrepo["env"]["GIT_WORK_TREE"]
+        git_dir = subrepo["git_dir"]
+        working_dir: str | None = subrepo["work_tree"]
 
         if bare:
             working_dir = None
@@ -568,7 +565,7 @@ class Gift(object):
 
     def try_init_sub_git(self, subrepo: SubRepoConf) -> None:
 
-        sub_gitdir_path = pjoin(self.git_dir, subrepo["sub_gitdir"])
+        sub_gitdir_path = subrepo["git_dir"]
 
         upstream = subrepo["upstream"]
 
@@ -607,7 +604,7 @@ class Gift(object):
 
     def try_init_sub_worktree(self, subrepo: SubRepoConf) -> None:
 
-        work_tree = subrepo['env']["GIT_WORK_TREE"]
+        work_tree = subrepo["work_tree"]
         if not os.path.isdir(work_tree):
             os.makedirs(work_tree, mode=0o755)
 
@@ -1183,7 +1180,7 @@ class Gift(object):
                 continue
 
             # Not initialized yet: `gift init --sub` populates it
-            if not os.path.isdir(subrepo["env"]["GIT_DIR"]):
+            if not os.path.isdir(subrepo["git_dir"]):
                 continue
 
             sub_git = self._sub_git(subrepo, bare=True)
@@ -1199,7 +1196,7 @@ class Gift(object):
     def _add_sub_tree(self, super_git: Git, super_tree: str, subrepo: SubRepoConf) -> tuple[str, str]:
         # Without --no-tags, fetch also copies the sub-repo tags that point
         # into the fetched history
-        super_git.cmdf("fetch", "--no-tags", subrepo["env"]["GIT_DIR"], "+HEAD:" + subrepo["refhead"], flag=CmdFlag.RAISE)
+        super_git.cmdf("fetch", "--no-tags", subrepo["git_dir"], "+HEAD:" + subrepo["refhead"], flag=CmdFlag.RAISE)
 
         sub_tree = super_git.tree_of(subrepo["refhead"], flag=CmdFlag.RAISE)
         super_tree = super_git.tree_add_obj(super_tree, subrepo["dir"], sub_tree)
