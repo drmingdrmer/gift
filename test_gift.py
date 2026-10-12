@@ -1229,6 +1229,76 @@ class TestGift(BaseTest):
         self.assertEqual(ori_hash, reset_hash,
                          "HEAD is reset to original master")
 
+    def test_reset_sub_missing_commit(self):
+        cmdx(giftp, "init", "--sub", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "-m", "update .gift", ".gift", cwd=self.superp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        # A clone of super fetches a new foo/bar commit at init
+        newbar = self._add_commit_to_bar_from_other_clone()
+        clonep = pjoin(self.base, "testdata", "superclone")
+        cmdx(origit, "clone", "-q", self.supergitp, clonep)
+        cmdx(giftp, "init", "--sub", cwd=clonep)
+
+        # super records that foo/bar commit, and a foo/wow commit that the
+        # clone has not fetched
+        cmdx(giftp, "fetch", "--sub", cwd=self.superp)
+        cmdx(giftp, "merge", "--sub", cwd=self.superp)
+        fwrite(pjoin(self.subwowp, "wow"), "new wow\n")
+        cmdx(giftp, *ident_args, "commit", "-m", "change wow", "wow", cwd=self.subwowp)
+        cmdx(giftp, "push", "-q", "origin", "master", cwd=self.subwowp)
+        newwow = cmd0(giftp, "rev-parse", "HEAD", cwd=self.subwowp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.superp)
+
+        # The clone checks out that commit of super, and only warns
+        _, _, err = cmdx(giftp, "pull", "-q", "--ff-only", cwd=clonep)
+        self.assertEqual("GIFT: warning: foo/wow: can not update refs/remotes/super/head to " + newwow, err[0])
+
+        bargitdir = pjoin(clonep, ".git", "gift", "subdir", "foo", "bar")
+        wowgitdir = pjoin(clonep, ".git", "gift", "subdir", "foo", "wow")
+        bar_index = cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage")
+        wow_index = cmdout(origit, "--git-dir=" + wowgitdir, "ls-files", "--stage")
+
+        # foo/wow can not find its commit, so foo/bar, before it, is not
+        # reset either
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "reset", "--sub", "--hard", cwd=clonep)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual(["reset --sub: foo/wow: can not find commit " + newwow + " recorded in .gift-refs of HEAD;"
+                          " run gift fetch --sub"], e.err)
+
+        bar_head = cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD")
+        wow_head = cmd0(origit, "--git-dir=" + wowgitdir, "rev-parse", "HEAD")
+        self.assertEqual("466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", bar_head)
+        self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", wow_head)
+
+        bar_index_after = cmdout(origit, "--git-dir=" + bargitdir, "ls-files", "--stage")
+        wow_index_after = cmdout(origit, "--git-dir=" + wowgitdir, "ls-files", "--stage")
+        self.assertEqual(bar_index, bar_index_after)
+        self.assertEqual(wow_index, wow_index_after)
+        self._fcontent("for_fetch", clonep, "foo", "bar", "for_fetch")
+        self._fcontent("new wow\n", clonep, "foo", "wow", "wow")
+
+        # init --sub fails on the same commit
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, "init", "--sub", cwd=clonep)
+        e = failure.exception
+
+        self.assertEqual(2, e.returncode)
+        self.assertEqual("foo/wow: can not update refs/remotes/super/head to " + newwow, e.err[0])
+
+        # After fetch --sub, each sub-repo is reset to the recorded commit
+        cmdx(giftp, "fetch", "--sub", cwd=clonep)
+        cmdx(giftp, "reset", "--sub", "--hard", cwd=clonep)
+
+        bar_head = cmd0(origit, "--git-dir=" + bargitdir, "rev-parse", "HEAD")
+        wow_head = cmd0(origit, "--git-dir=" + wowgitdir, "rev-parse", "HEAD")
+        self.assertEqual(newbar, bar_head)
+        self.assertEqual(newwow, wow_head)
+        self._fcontent("new wow\n", clonep, "foo", "wow", "wow")
+
     def _add_commit_to_bar_from_other_clone(self):
         cmdx(origit, "clone", self.bargitp, self.barp)
 

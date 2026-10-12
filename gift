@@ -778,7 +778,13 @@ class Gift(object):
                 self.conf = self.parse_conf()
             except GiftError as e:
                 display(2, "GIFT: warning: " + str(e))
-            self._update_super_head_refs(refs_after)
+
+            # The command itself has run: a sub-repo that lacks the recorded
+            # commit, until fetch --sub brings it in, only warns
+            try:
+                self._update_super_head_refs(refs_after)
+            except GiftError as e:
+                display(2, "GIFT: warning: " + str(e))
 
     def _strip_sub_flag(self, cmds: list[str]) -> tuple[str, bool, list[str]]:
 
@@ -1035,14 +1041,39 @@ class Gift(object):
             if arg in cmds:
                 args.append(arg)
 
+        # super/head is stale after a command on the super repo failed to
+        # update it. Each target is the commit that HEAD records, and every
+        # target is checked before the first reset.
+        head_refs = self.read_head_refs()
+        recorded = {}
+        if head_refs is not None:
+            recorded = dict(head_refs)
+
+        refs = []
         for subrepo in self.conf["dirs"].values():
             self.check_worktree(subrepo)
+            commit_hash = recorded.get(subrepo["dir"])
+            if commit_hash is None:
+                raise GiftError("reset --sub: {}: {} of HEAD records no commit".format(subrepo["dir"], refs_filename))
+
+            sub_git = self._sub_git(subrepo, bare=True)
+            if sub_git.obj_type(commit_hash) != "commit":
+                msg = "reset --sub: {}: can not find commit {} recorded in {} of HEAD; run gift fetch --sub"
+                raise GiftError(msg.format(subrepo["dir"], commit_hash, refs_filename))
+            refs.append([subrepo["dir"], commit_hash])
+
+        self._update_super_head_refs(refs)
+
+        for subrepo in self.conf["dirs"].values():
             sub_git = self._sub_git(subrepo)
             _, out, err = sub_git.cmdf("reset", *args, super_head_ref, flag=CmdFlag.RAISE)
             display(out, err)
 
     def _update_super_head_refs(self, refs: list[list[str]]) -> None:
-
+        # Every sub-repo is updated even if another fails. The failures are
+        # raised together: a --sub command fails, and a command on the super
+        # repo warns.
+        errors = []
         for subdir, commit_hash in refs:
             subrepo = self.conf["dirs"].get(subdir)
             if subrepo is None:
@@ -1056,8 +1087,11 @@ class Gift(object):
             try:
                 sub_git.cmdf("update-ref", super_head_ref, commit_hash, flag=CmdFlag.RAISE)
             except CalledProcessError as e:
-                sub_git.out(2, "can not update", super_head_ref, "to", commit_hash)
-                display(e.out, e.err)
+                errors.append("{}: can not update {} to {}".format(subdir, super_head_ref, commit_hash))
+                errors.extend(e.err)
+
+        if errors != []:
+            raise GiftError("\n".join(errors))
 
     def _add_sub_tree(self, super_tree: str, subrepo: SubRepoConf) -> tuple[str, str]:
         super_git = self._super_git(root=True)
