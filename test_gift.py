@@ -915,6 +915,112 @@ class TestGift(BaseTest):
         self.assertEqual(2, e.returncode)
         self.assertEqual([".gift-refs: Permission denied"], e.err)
 
+    def test_clone_sub_failed_import(self):
+        cmdx(giftp, "init", cwd=self.emptyp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../bargit@master", "bar", cwd=self.emptyp)
+        confp = pjoin(self.emptyp, ".gift")
+        refsp = pjoin(self.emptyp, ".gift-refs")
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+
+        # The clone commits .gift, then can not update super/head of bar
+        lockp = pjoin(self.emptyp, ".git", "gift", "subdir", "bar", "refs", "remotes", "super", "head.lock")
+        fwrite(lockp, "")
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        e = failure.exception
+
+        # The undo also moves HEAD back from the commit of .gift
+        head_after = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        index_after = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+        names = sorted(os.listdir(self.emptyp))
+        sub_gitdirs = os.listdir(pjoin(self.emptyp, ".git", "gift", "subdir"))
+        self.assertEqual(2, e.returncode)
+        self.assertIn("bar: can not update refs/remotes/super/head to 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af", e.err)
+        self.assertEqual(head, head_after)
+        self.assertEqual(index, index_after)
+        self._fcontent("dirs:\n  bar: ../bargit@master\n", confp)
+        self._fcontent("- - bar\n  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af\n", refsp)
+        self.assertEqual([".gift", ".gift-refs", ".git", ".gitignore", "bar"], names)
+        self.assertEqual(["bar"], sub_gitdirs)
+
+        # Without the lock, the same clone works
+        os.unlink(lockp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+
+        self._fcontent("dirs:\n  bar: ../bargit@master\n  wow: ../wowgit@master\n", confp)
+        self._gitoutput([origit, "show", "HEAD:.gift-refs"], [
+            "- - bar",
+            "  - 466f0bbdf56b1428edf2aed4f6a99c1bd1d4c8af",
+            "- - wow",
+            "  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54",
+        ], cwd=self.emptyp)
+        self._gitoutput([origit, "show", "HEAD:wow/wow"], ["wow"], cwd=self.emptyp)
+
+    def test_clone_sub_failed_first_import(self):
+        # The first commit, of .gift, leaves a broken .gift-refs, which the
+        # import can not read
+        cmdx(giftp, "init", cwd=self.emptyp)
+        hookp = pjoin(self.emptyp, ".git", "hooks", "post-commit")
+        fwrite(hookp, "#!/bin/sh\necho '- bad' > .gift-refs\n")
+        os.chmod(hookp, 0o755)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        e = failure.exception
+
+        # The undo deletes the branch that the commit made
+        commits = cmdout(origit, "rev-list", "--all", cwd=self.emptyp)
+        index = cmdout(origit, "ls-files", "--stage", cwd=self.emptyp)
+        names = sorted(os.listdir(self.emptyp))
+        sub_gitdirs_exist = os.path.exists(pjoin(self.emptyp, ".git", "gift"))
+        self.assertEqual(2, e.returncode)
+        self.assertEqual([".gift-refs: expect a list of [<dir>, <commit>], got: 'bad'"], e.err[-1:])
+        self.assertEqual([], commits)
+        self.assertEqual([], index)
+        self.assertEqual([".git", ".gitignore"], names)
+        self.assertFalse(sub_gitdirs_exist)
+
+        # Without the hook, the same clone works
+        os.unlink(hookp)
+        cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        self._gitoutput([origit, "show", "HEAD:wow/wow"], ["wow"], cwd=self.emptyp)
+
+    def test_clone_sub_failed_super_head(self):
+        # After the commit of .gift, a hook locks super/head of the new
+        # sub-repo, which the import updates after it moves HEAD
+        cmdx(giftp, "init", cwd=self.emptyp)
+        lockp = pjoin(self.emptyp, ".git", "gift", "subdir", "wow", "refs", "remotes", "super", "head.lock")
+        hookp = pjoin(self.emptyp, ".git", "hooks", "post-commit")
+        fwrite(hookp, '#!/bin/sh\nmkdir -p "' + os.path.dirname(lockp) + '"\ntouch "' + lockp + '"\n')
+        os.chmod(hookp, 0o755)
+
+        with self.assertRaises(CalledProcessError) as failure:
+            cmdx(giftp, *ident_args, "clone", "--sub", "../wowgit@master", "wow", cwd=self.emptyp)
+        e = failure.exception
+
+        # The clone stays, since HEAD has the import
+        head = cmd0(origit, "rev-parse", "HEAD", cwd=self.emptyp)
+        meta_commit = cmd0(origit, "rev-parse", "HEAD~", cwd=self.emptyp)
+        self.assertEqual(2, e.returncode)
+        self.assertIn("GIFT: clone --sub: can not undo the failed clone: HEAD moved from " + meta_commit + " to " + head,
+                      e.err)
+        self.assertIn("commit --sub: committed " + head + ", but can not update refs/remotes/super/head;"
+                      " run gift commit --sub again to update it", e.err)
+        self._gitoutput([origit, "show", "HEAD:.gift-refs"],
+                        ["- - wow", "  - 6bf37e52cbafcf55ff4710bb2b63309b55bf8e54"], cwd=self.emptyp)
+        self._fcontent("dirs:\n  wow: ../wowgit@master\n", self.emptyp, ".gift")
+        self._fcontent("wow\n", self.emptyp, "wow", "wow")
+
+        # As the error says, commit --sub updates super/head
+        os.unlink(lockp)
+        os.unlink(hookp)
+        cmdx(giftp, *ident_args, "commit", "--sub", cwd=self.emptyp)
+
+        wow_super_head = cmd0(giftp, "rev-parse", "refs/remotes/super/head", cwd=pjoin(self.emptyp, "wow"))
+        self.assertEqual("6bf37e52cbafcf55ff4710bb2b63309b55bf8e54", wow_super_head)
+
     def test_metadata_symlink(self):
         # .gift-refs in HEAD is a symlink to a file out of the repo
         cmdx(giftp, "init", "--sub", cwd=self.superp)

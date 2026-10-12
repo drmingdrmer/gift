@@ -922,10 +922,12 @@ class Gift(object):
         # Commit .gift only after the clone works: a bad entry in HEAD would
         # break every later --sub command, in every clone. A failed clone puts
         # back .gift, .gift-refs and their index entries, which the commit
-        # below adds.
+        # below adds, and HEAD from before that commit.
         root_git = self._super_git(root=True)
         meta_files = [conf_filename, refs_filename]
         saved = self._save_state(root_git, meta_files, meta_files)
+        orig_head = root_git.rev_of("HEAD")
+        meta_commit = None
         work_tree = pjoin(self.working_dir, subdir)
         work_tree_existed = os.path.exists(work_tree)
         # A failed clone also removes the parent dirs that it made. An empty
@@ -950,9 +952,34 @@ class Gift(object):
             super_git = self._super_git()
             super_git.cmdf("add", *changed_paths, flag=CmdFlag.RAISE)
             super_git.cmdf("commit", *changed_paths, "-m", "add sub repo: " + remote + " in " + subdir, flag=CmdFlag.RAISE)
+            meta_commit = root_git.rev_of("HEAD")
+
+            # The import publishes the clone when it moves HEAD on from the
+            # commit of .gift. A failure before that undoes the commit.
+            self.x_init_sub([])
+            self.x_commit_sub([])
         except BaseException:
             # An error in the undo must not hide the error of the clone
             what = "clone --sub: can not undo the failed clone"
+            if meta_commit is not None:
+                # The import, or another command, may have moved HEAD on from
+                # the commit of .gift: then the clone stays as HEAD has it
+                head = root_git.rev_of("HEAD")
+                if head != meta_commit:
+                    display(2, "GIFT: {}: HEAD moved from {} to {}".format(what, meta_commit, head))
+                    raise
+
+                # update-ref moves HEAD back only from that commit, in case
+                # another command moves it meanwhile
+                if orig_head is None:
+                    undo_args = ["update-ref", "-d", "HEAD", meta_commit]
+                else:
+                    undo_args = ["update-ref", "-m", "clone --sub: undo", "HEAD", orig_head, meta_commit]
+                code, _, err = root_git.cmdf(*undo_args)
+                if code != 0:
+                    display(2, ["GIFT: " + what + ":", *err])
+                    raise
+
             self._restore_state(root_git, saved, what)
             try:
                 # This clone made the sub git dir, since none was there before.
@@ -968,9 +995,6 @@ class Gift(object):
             except Exception as e:
                 report_undo_error(what, e)
             raise
-
-        self.x_init_sub([])
-        self.x_commit_sub([])
 
     def check_no_args(self, cmds: list[str]) -> None:
         args = cmds[1:]
